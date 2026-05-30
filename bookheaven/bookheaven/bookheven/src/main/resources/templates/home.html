@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>📚 BookHeaven - Cửa Hàng Sách Trực Tuyến + Quản trị & Thư viện số</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    body { background: #f9fafb; }
+    .transition-smooth { transition: all 0.2s ease; }
+    .book-card:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -12px rgba(0,0,0,0.1); }
+    .modal-bg { background-color: rgba(0,0,0,0.5); backdrop-filter: blur(3px); }
+    .reader-content { line-height: 1.8; font-size: 1.1rem; max-height: 70vh; overflow-y: auto; padding: 1rem; background: #fefce8; }
+    .cover-preview { max-width: 80px; max-height: 100px; object-fit: cover; border-radius: 8px; margin-top: 5px; }
+    .avatar-preview { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; }
+  </style>
+</head>
+<body>
+
+  <!-- NAVIGATION BAR -->
+  <nav class="bg-white shadow-md sticky top-0 z-30 border-b border-gray-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center space-x-2 cursor-pointer" id="navHomeBtn">
+          <i class="fas fa-book-open text-indigo-600 text-2xl"></i>
+          <span class="font-bold text-xl text-gray-800">Book<span class="text-indigo-600">Heaven</span></span>
+        </div>
+        <div class="hidden md:flex items-center space-x-3 flex-1 max-w-md mx-6" id="userSearchContainer">
+          <div class="relative w-full">
+            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+            <input type="text" id="globalSearchInput" placeholder="Tìm kiếm sách, tác giả..." class="w-full pl-9 pr-4 py-2 rounded-full border border-gray-200 bg-gray-50 focus:bg-white focus:border-indigo-300">
+          </div>
+          <button id="toggleAdvancedBtn" class="text-gray-500 hover:text-indigo-600 text-sm font-medium px-2"><i class="fas fa-sliders-h mr-1"></i> Nâng cao</button>
+        </div>
+        <div class="flex items-center space-x-4">
+          <button id="adminSwitchBtn" class="text-gray-600 hover:text-indigo-600 text-sm font-medium px-2 py-1 rounded-full bg-gray-100"><i class="fas fa-user-shield mr-1"></i> Quản trị</button>
+          <button id="libraryBtn" class="text-gray-600 hover:text-indigo-600 text-sm font-medium px-2 py-1 rounded-full bg-gray-100"><i class="fas fa-book-reader mr-1"></i> Thư viện</button>
+          <button id="cartIconBtn" class="relative text-gray-700 hover:text-indigo-600">
+            <i class="fas fa-shopping-cart text-xl"></i>
+            <span id="cartCountBadge" class="absolute -top-2 -right-3 bg-red-500 text-white text-[11px] font-bold rounded-full h-5 w-5 flex items-center justify-center">0</span>
+          </button>
+          <div id="authSection" class="flex items-center space-x-2"></div>
+          <button id="mobileSearchBtn" class="md:hidden text-gray-600"><i class="fas fa-search text-xl"></i></button>
+        </div>
+      </div>
+      <div id="mobileSearchPanel" class="md:hidden hidden pb-3 pt-1"></div>
+    </div>
+  </nav>
+
+  <main id="appContainer" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"></main>
+
+  <!-- MODAL ĐỌC SÁCH -->
+  <div id="readerModal" class="fixed inset-0 z-50 hidden items-center justify-center modal-bg" style="display: none;">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="flex justify-between items-center px-6 py-4 border-b bg-indigo-50">
+        <h3 id="readerTitle" class="text-xl font-bold text-gray-800">Đọc sách</h3>
+        <button id="closeReaderModal" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+      </div>
+      <div id="readerContent" class="reader-content p-6 text-gray-700"></div>
+      <div class="bg-gray-50 px-6 py-3 text-right border-t flex justify-between">
+        <button id="saveProgressBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg">Lưu tiến trình</button>
+        <button id="closeReaderFooter" class="px-4 py-2 bg-gray-200 rounded-lg">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL THANH TOÁN -->
+  <div id="paymentModal" class="fixed inset-0 z-50 hidden items-center justify-center modal-bg p-4" style="display: none;">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
+      <h3 id="paymentModalTitle" class="text-xl font-bold mb-2 text-center">Thanh toán</h3>
+      <p id="paymentAmountLabel" class="text-center text-indigo-600 font-bold text-lg mb-4"></p>
+      <div id="paymentPhysicalFields" class="hidden space-y-2 mb-4">
+        <input id="payAddress" placeholder="Địa chỉ nhận hàng *" class="w-full border rounded-xl p-3">
+        <input id="payPhone" placeholder="Số điện thoại người nhận *" class="w-full border rounded-xl p-3">
+      </div>
+      <div id="paymentMethodSelection" class="space-y-2">
+        <button data-pay="cod" class="payMethodBtn w-full bg-amber-500 text-white py-3 rounded-xl"><i class="fas fa-money-bill-wave mr-2"></i> Tiền mặt (COD)</button>
+        <button data-pay="momo" class="payMethodBtn w-full bg-pink-500 text-white py-3 rounded-xl"><i class="fas fa-wallet mr-2"></i> Chuyển khoản MoMo</button>
+        <button data-pay="zalopay" class="payMethodBtn w-full bg-blue-500 text-white py-3 rounded-xl"><i class="fas fa-comment-dollar mr-2"></i> Chuyển khoản ZaloPay</button>
+      </div>
+      <div id="paymentTransferSteps" class="hidden mt-4"></div>
+      <button id="cancelPayment" class="w-full border border-gray-300 py-2 rounded-xl mt-3">Đóng / Quay lại</button>
+    </div>
+  </div>
+
+  <script>
+    // ======================= DỮ LIỆU MẪU =======================
+    let BOOKS_DB = [
+      { id: 1, title: "Đại gia Gatsby", author: "F. Scott Fitzgerald", price: 125000, type: "physical", categoryId: 1, coverBase64: null, coverUrl: "https://picsum.photos/id/20/300/400", description: "Kiệt tác văn học Mỹ về giấc mơ và sự sụp đổ.", previewText: "Trong mùa hè ấy, Nick Carraway đến West Egg và chứng kiến thế giới xa hoa của Gatsby...", fullText: null },
+      { id: 2, title: "JavaScript: Tinh hoa", author: "Douglas Crockford", price: 89000, type: "ebook", categoryId: 3, coverBase64: null, coverUrl: "https://picsum.photos/id/1/300/400", description: "Khám phá những phần hay nhất của JavaScript.", previewText: null, fullText: "Chương 1: JavaScript được thiết kế để chạy trên trình duyệt. Nó là ngôn ngữ mạnh mẽ, linh hoạt và đôi khi khó đoán. ".repeat(30) },
+      { id: 3, title: "Clean Code", author: "Robert C. Martin", price: 249000, type: "physical", categoryId: 3, coverBase64: null, coverUrl: "https://picsum.photos/id/26/300/400", description: "Nguyên tắc viết code sạch, dễ bảo trì.", previewText: "Code sạch không chỉ viết cho máy mà còn cho người đọc sau này. Một hàm nên làm đúng một việc...", fullText: null },
+      { id: 4, title: "Atomic Habits", author: "James Clear", price: 139000, type: "ebook", categoryId: 4, coverBase64: null, coverUrl: "https://picsum.photos/id/29/300/400", description: "Thay đổi nhỏ, kết quả lớn.", previewText: null, fullText: "Nội dung đầy đủ Atomic Habits: Những thói quen nguyên tử giúp bạn thay đổi cuộc sống. ".repeat(25) },
+      { id: 5, title: "Dune", author: "Frank Herbert", price: 185000, type: "physical", categoryId: 2, coverBase64: null, coverUrl: "https://picsum.photos/id/30/300/400", description: "Sử thi khoa học viễn tưởng kinh điển.", previewText: "Paul Atreides bước vào sa mạc Arrakis, nơi gia tộc Harkonnen và sức mạnh gia vị đang chờ...", fullText: null },
+      { id: 6, title: "The Pragmatic Programmer", author: "David Thomas", price: 210000, type: "ebook", categoryId: 3, coverBase64: null, coverUrl: "https://picsum.photos/id/0/300/400", description: "Kỹ năng thực hành cho lập trình viên.", previewText: null, fullText: "Toàn bộ nội dung sách The Pragmatic Programmer: Hãy học cách tư duy như một lập trình viên thực thụ. ".repeat(20) }
+    ];
+
+    let CATEGORIES_DB = [];
+    const DEFAULT_CATEGORIES = [
+      { id: 1, name: 'Văn học', slug: 'van-hoc' },
+      { id: 2, name: 'Khoa học viễn tưởng', slug: 'khoa-hoc-vien-tuong' },
+      { id: 3, name: 'Lập trình & Công nghệ', slug: 'lap-trinh' },
+      { id: 4, name: 'Phát triển bản thân', slug: 'phat-trien-ban-than' },
+      { id: 5, name: 'Kinh doanh', slug: 'kinh-doanh' }
+    ];
+
+    let ORDERS_DB = [];
+    let USERS_DB = [];
+    let USER_LIBRARY = {};  // { userEmail: [{ bookId, progress, purchasedAt }] }
+
+    // Admin credentials
+    const ADMIN_EMAIL = "bookheaven@gmail.com";
+    const ADMIN_PASSWORD = "Admin123";
+    let isAdminLoggedIn = false;
+
+    // Global state
+    let currentUser = null;
+    let cart = [];
+    let currentView = 'home';
+    let selectedBookId = null;
+    let filterOptions = { keyword: '', type: 'all', minPrice: '', maxPrice: '', author: '', categoryId: '' };
+    let isAdvancedOpen = false;
+    let adminSubView = 'dashboard';
+    let salesChart = null;
+    let pendingEBookPurchase = null;
+    let pendingPhysicalOrderDraft = null;
+
+    // ======================= HELPER LƯU TRỮ =======================
+    function saveCart() { localStorage.setItem('bookheaven_cart', JSON.stringify(cart)); }
+    function loadCart() {
+      const stored = localStorage.getItem('bookheaven_cart');
+      if(stored) try { cart = JSON.parse(stored); } catch(e){ cart = []; } else cart = [];
+      updateCartBadge();
+    }
+    function saveUsers() {
+      if(!localStorage.getItem('bookheaven_users')) {
+        USERS_DB = [
+          { username: "Nguyễn Văn A", email: "demo@example.com", password: "123456", avatar: null, createdAt: new Date().toISOString() }
+        ];
+        localStorage.setItem('bookheaven_users', JSON.stringify(USERS_DB));
+      } else {
+        USERS_DB = JSON.parse(localStorage.getItem('bookheaven_users'));
+      }
+    }
+    function getUsers() { return USERS_DB; }
+    function addUser(user) { USERS_DB.push(user); localStorage.setItem('bookheaven_users', JSON.stringify(USERS_DB)); }
+    function deleteUser(email) { USERS_DB = USERS_DB.filter(u => u.email !== email); localStorage.setItem('bookheaven_users', JSON.stringify(USERS_DB)); }
+    function updateUser(email, updates) {
+      const index = USERS_DB.findIndex(u => u.email === email);
+      if(index !== -1) { Object.assign(USERS_DB[index], updates); localStorage.setItem('bookheaven_users', JSON.stringify(USERS_DB)); }
+      if(currentUser && currentUser.email === email) { Object.assign(currentUser, updates); saveSession(); }
+    }
+    
+    function saveSession() { if(currentUser) localStorage.setItem('bookheaven_session', JSON.stringify(currentUser)); else localStorage.removeItem('bookheaven_session'); }
+    function loadSession() { const sess = localStorage.getItem('bookheaven_session'); currentUser = sess ? JSON.parse(sess) : null; }
+    
+    function saveBooks() { localStorage.setItem('bookheaven_books', JSON.stringify(BOOKS_DB)); }
+    function saveCategories() { localStorage.setItem('bookheaven_categories', JSON.stringify(CATEGORIES_DB)); }
+    function loadCategories() {
+      const stored = localStorage.getItem('bookheaven_categories');
+      CATEGORIES_DB = stored ? JSON.parse(stored) : [];
+      if (!CATEGORIES_DB.length) {
+        CATEGORIES_DB = [...DEFAULT_CATEGORIES];
+        saveCategories();
+      }
+    }
+    function getCategoryName(id) {
+      if (!id) return '';
+      const cat = CATEGORIES_DB.find(c => c.id === id);
+      return cat ? cat.name : '';
+    }
+    function categoryOptionsHtml(selectedId) {
+      const sel = selectedId ? +selectedId : '';
+      return `<option value="">-- Chọn thể loại --</option>` +
+        CATEGORIES_DB.map(c => `<option value="${c.id}" ${sel === c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+    }
+    function loadBooks() {
+      const stored = localStorage.getItem('bookheaven_books');
+      if(stored) BOOKS_DB = JSON.parse(stored);
+      else saveBooks();
+    }
+    function saveOrders() { localStorage.setItem('bookheaven_orders', JSON.stringify(ORDERS_DB)); }
+    function loadOrders() {
+      const stored = localStorage.getItem('bookheaven_orders');
+      if(stored) ORDERS_DB = JSON.parse(stored);
+      else {
+        ORDERS_DB = [
+          { id: 1001, userId: 'demo@example.com', customerName: 'Nguyễn Văn A', address: 'Hà Nội', total: 374000, status: 'pending', items: [{ title: 'Clean Code', price: 249000, quantity: 1, type: 'physical' }], createdAt: new Date().toISOString() }
+        ];
+        saveOrders();
+      }
+    }
+    
+    // Library management
+    function loadLibrary() {
+      const stored = localStorage.getItem('bookheaven_user_library');
+      if(stored) USER_LIBRARY = JSON.parse(stored);
+      else USER_LIBRARY = {};
+    }
+    function saveLibrary() { localStorage.setItem('bookheaven_user_library', JSON.stringify(USER_LIBRARY)); }
+    function addBookToLibrary(userEmail, bookId) {
+      if(!USER_LIBRARY[userEmail]) USER_LIBRARY[userEmail] = [];
+      const existing = USER_LIBRARY[userEmail].find(b => b.bookId === bookId);
+      if(!existing) {
+        USER_LIBRARY[userEmail].push({ bookId, progress: 0, purchasedAt: new Date().toISOString() });
+        saveLibrary();
+      }
+    }
+    function getUserLibrary(userEmail) { return USER_LIBRARY[userEmail] || []; }
+    function updateProgress(userEmail, bookId, progress) {
+      const lib = USER_LIBRARY[userEmail];
+      if(lib) {
+        const entry = lib.find(b => b.bookId === bookId);
+        if(entry) entry.progress = progress;
+        saveLibrary();
+      }
+    }
+    function getProgress(userEmail, bookId) {
+      const lib = USER_LIBRARY[userEmail];
+      if(lib) {
+        const entry = lib.find(b => b.bookId === bookId);
+        return entry ? entry.progress : 0;
+      }
+      return 0;
+    }
+
+    function getCoverUrl(book) {
+      if(book.coverBase64) return book.coverBase64;
+      return book.coverUrl || "https://picsum.photos/id/1/300/400";
+    }
+
+    function showToast(msg, type='info') {
+      const toastDiv = document.createElement('div');
+      toastDiv.className = `fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl shadow-lg text-white text-sm font-medium ${type === 'success' ? 'bg-green-600' : 'bg-indigo-600'} animate-bounce`;
+      toastDiv.innerText = msg;
+      document.body.appendChild(toastDiv);
+      setTimeout(() => toastDiv.remove(), 2500);
+    }
+
+    function updateCartBadge() {
+      const total = cart.reduce((sum, i) => sum + i.quantity, 0);
+      document.getElementById('cartCountBadge').innerText = total;
+    }
+
+    // ======================= CÁC VIEW =======================
+    function renderCurrentView() {
+      const container = document.getElementById('appContainer');
+      const userSearchContainer = document.getElementById('userSearchContainer');
+      if(!container) return;
+      userSearchContainer?.classList.remove('hidden');
+      {
+        if(currentView === 'home') renderHomeView(container);
+        else if(currentView === 'detail') renderDetailView(container);
+        else if(currentView === 'cart') renderCartView(container);
+        else if(currentView === 'checkout') renderCheckoutView(container);
+        else if(currentView === 'login') renderLoginView(container);
+        else if(currentView === 'register') renderRegisterView(container);
+        else if(currentView === 'library') renderLibraryView(container);
+        else if(currentView === 'profile') renderProfileView(container);
+        else if(currentView === 'settings') renderSettingsView(container);
+        else renderHomeView(container);
+      }
+      updateNavAuthUI();
+    }
+
+    // Thư viện cá nhân
+    function renderLibraryView(container) {
+      if(!currentUser) {
+        container.innerHTML = `<div class="text-center py-16"><i class="fas fa-book-reader text-6xl text-gray-300"></i><p class="mt-4">Vui lòng đăng nhập để xem Thư viện sách số của bạn.</p><button id="loginPromptBtn" class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-xl">Đăng nhập</button></div>`;
+        document.getElementById('loginPromptBtn')?.addEventListener('click', () => { currentView='login'; renderCurrentView(); });
+        return;
+      }
+      const myBooks = getUserLibrary(currentUser.email);
+      if(myBooks.length === 0) {
+        container.innerHTML = `<div class="text-center py-16"><i class="fas fa-book-open text-6xl text-gray-300"></i><p class="mt-4">Bạn chưa có sách số nào. Hãy mua sách số để đọc!</p><button id="shopNowLibBtn" class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-xl">Mua sách ngay</button></div>`;
+        document.getElementById('shopNowLibBtn')?.addEventListener('click', () => { currentView='home'; renderCurrentView(); });
+        return;
+      }
+      let html = `<h2 class="text-2xl font-bold mb-6"><i class="fas fa-book-reader text-indigo-500 mr-2"></i>Thư viện sách số của tôi</h2><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">`;
+      for(let lib of myBooks) {
+        const book = BOOKS_DB.find(b => b.id === lib.bookId);
+        if(!book) continue;
+        const progressPercent = book.fullText ? Math.floor((lib.progress / book.fullText.length) * 100) : 0;
+        html += `
+          <div class="bg-white rounded-2xl shadow overflow-hidden">
+            <img src="${getCoverUrl(book)}" class="h-48 w-full object-cover">
+            <div class="p-4">
+              <h3 class="font-bold text-lg">${book.title}</h3>
+              <p class="text-gray-500 text-sm">${book.author}</p>
+              <div class="mt-2 bg-gray-200 rounded-full h-2"><div class="bg-green-500 h-2 rounded-full" style="width: ${progressPercent}%"></div></div>
+              <p class="text-xs text-gray-500 mt-1">Tiến độ: ${progressPercent}%</p>
+              <div class="flex gap-2 mt-3">
+                <button class="readFromStartBtn bg-indigo-600 text-white px-3 py-1 rounded-lg text-sm" data-id="${book.id}">📖 Đọc từ đầu</button>
+                <button class="readContinueBtn bg-gray-200 px-3 py-1 rounded-lg text-sm" data-id="${book.id}">▶ Tiếp tục</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+      html += `</div>`;
+      container.innerHTML = html;
+      document.querySelectorAll('.readFromStartBtn').forEach(btn => {
+        btn.addEventListener('click', () => openReader(parseInt(btn.dataset.id), true));
+      });
+      document.querySelectorAll('.readContinueBtn').forEach(btn => {
+        btn.addEventListener('click', () => openReader(parseInt(btn.dataset.id), false));
+      });
+    }
+
+    function openReader(bookId, startFromBeginning) {
+      const book = BOOKS_DB.find(b => b.id === bookId);
+      if(!book || book.type !== 'ebook') return;
+      if(!currentUser) { showToast("Vui lòng đăng nhập để đọc sách", "info"); return; }
+      const owned = getUserLibrary(currentUser.email).some(lib => lib.bookId === bookId);
+      if(!owned) { showToast("Bạn chưa mua sách này. Hãy đọc thử hoặc thanh toán trước.", "info"); return; }
+      const content = book.fullText || "Nội dung chưa có, vui lòng liên hệ admin.";
+      let progress = startFromBeginning ? 0 : getProgress(currentUser.email, bookId);
+      if(progress > content.length) progress = 0;
+      const displayContent = content.substring(0, progress) + `<span class="bg-yellow-200">${content.substring(progress, progress+1) || ''}</span>` + content.substring(progress+1);
+      document.getElementById('readerTitle').innerText = book.title;
+      document.getElementById('readerContent').innerHTML = `<div class="whitespace-pre-line">${displayContent}</div>`;
+      const modal = document.getElementById('readerModal');
+      modal.style.display = 'flex';
+      document.getElementById('saveProgressBtn').classList.remove('hidden');
+      const readerDiv = document.querySelector('#readerContent');
+      const saveProgress = () => {
+        const scrollPos = readerDiv.scrollTop;
+        const maxScroll = readerDiv.scrollHeight - readerDiv.clientHeight;
+        const percent = maxScroll > 0 ? scrollPos / maxScroll : 0;
+        const newProgress = Math.floor(percent * content.length);
+        updateProgress(currentUser.email, bookId, newProgress);
+        showToast("Đã lưu tiến trình đọc", "success");
+      };
+      document.getElementById('saveProgressBtn').onclick = saveProgress;
+      const closeReader = () => { modal.style.display = 'none'; };
+      document.getElementById('closeReaderModal').onclick = closeReader;
+      document.getElementById('closeReaderFooter').onclick = closeReader;
+      modal.onclick = (e) => { if(e.target === modal) closeReader(); };
+    }
+
+    function getPreviewContent(book) {
+      if (book.previewText) return book.previewText;
+      if (book.type === 'ebook' && book.fullText) {
+        const len = Math.max(Math.floor(book.fullText.length * 0.1), 400);
+        return book.fullText.substring(0, len) + '\n\n...(10% nội dung — mua sách để đọc toàn bộ)';
+      }
+      if (book.type === 'physical' && book.description) {
+        return '📖 Đọc thử (trích từ mô tả):\n\n' + book.description + '\n\n— Mua sách bản in để đọc toàn bộ nội dung.';
+      }
+      return book.type === 'physical'
+        ? 'Nội dung đọc thử cho sách vật lý chưa có. Admin có thể thêm đoạn đọc thử trong trang quản trị.'
+        : 'Nội dung đọc thử cho sách số chưa có. Admin có thể tải file PDF để tự tạo 10% đọc thử.';
+    }
+    function openPreview(bookId) {
+      const book = BOOKS_DB.find(b => b.id === bookId);
+      if(!book) return;
+      const preview = getPreviewContent(book);
+      document.getElementById('readerTitle').innerText = `${book.title} - Đọc thử`;
+      document.getElementById('readerContent').innerHTML = `<div class="whitespace-pre-line">${preview}</div>`;
+      const modal = document.getElementById('readerModal');
+      modal.style.display = 'flex';
+      document.getElementById('saveProgressBtn').classList.add('hidden');
+      const closeReader = () => {
+        modal.style.display = 'none';
+        document.getElementById('saveProgressBtn').classList.remove('hidden');
+      };
+      document.getElementById('closeReaderModal').onclick = closeReader;
+      document.getElementById('closeReaderFooter').onclick = closeReader;
+      modal.onclick = (e) => { if(e.target === modal) closeReader(); };
+    }
+
+    // Trang cá nhân
+    function renderProfileView(container) {
+      if(!currentUser) {
+        container.innerHTML = `<div class="text-center py-16"><p>Vui lòng đăng nhập</p><button class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-xl" id="toLoginBtn">Đăng nhập</button></div>`;
+        document.getElementById('toLoginBtn')?.addEventListener('click',()=>{currentView='login';renderCurrentView();});
+        return;
+      }
+      const userOrders = ORDERS_DB.filter(o => o.userId === currentUser.email);
+      const myBooks = getUserLibrary(currentUser.email);
+      const avatarUrl = currentUser.avatar || "https://ui-avatars.com/api/?background=4f46e5&color=fff&name="+encodeURIComponent(currentUser.username);
+      let ordersHtml = `<div class="mt-6"><h3 class="text-xl font-bold mb-3">Lịch sử mua hàng</h3><div class="overflow-x-auto"><table class="min-w-full bg-white rounded-2xl shadow"><thead class="bg-gray-50"><tr><th class="px-4 py-2">Mã đơn</th><th>Ngày</th><th>Tổng tiền</th><th>Trạng thái</th><th>Chi tiết</th></tr></thead><tbody>`;
+      if(userOrders.length===0) ordersHtml += `<tr><td colspan="5" class="text-center py-4">Chưa có đơn hàng nào</td></tr>`;
+      userOrders.forEach(order => {
+        ordersHtml += `<tr class="border-b"><td class="px-4 py-2">#${order.id}</td><td>${new Date(order.createdAt).toLocaleDateString()}</td><td>${order.total.toLocaleString()}đ</td><td class="px-4 py-2"><span class="px-2 py-1 rounded-full text-xs ${order.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${order.status === 'delivered' ? 'Đã giao' : 'Chờ xử lý'}</span></td><td><button class="viewOrderDetail text-indigo-600" data-id="${order.id}">Xem</button></td></tr>`;
+      });
+      ordersHtml += `</tbody></table></div></div>`;
+      container.innerHTML = `
+        <div class="max-w-4xl mx-auto">
+          <div class="bg-white rounded-2xl shadow p-6 flex items-center gap-6 flex-wrap md:flex-nowrap">
+            <img src="${avatarUrl}" class="w-24 h-24 rounded-full object-cover border-2 border-indigo-200">
+            <div class="flex-1"><h2 class="text-2xl font-bold">${currentUser.username}</h2><p class="text-gray-500">${currentUser.email}</p><p class="text-sm text-gray-400 mt-1">Tham gia: ${new Date(currentUser.createdAt || Date.now()).toLocaleDateString()}</p></div>
+            <button id="editProfileBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-xl"><i class="fas fa-cog"></i> Cài đặt trang cá nhân</button>
+          </div>
+          <div class="bg-white rounded-2xl shadow p-6 mt-6"><h3 class="text-xl font-bold mb-3"><i class="fas fa-book"></i> Sách số đã mua (${myBooks.length})</h3><div class="flex flex-wrap gap-3">${myBooks.map(lib => { const b = BOOKS_DB.find(bk=>bk.id===lib.bookId); return b ? `<div class="bg-gray-100 rounded-lg p-2 flex items-center gap-2"><img src="${getCoverUrl(b)}" class="w-10 h-14 object-cover rounded"><span>${b.title}</span></div>` : ''; }).join('') || '<p class="text-gray-500">Chưa có sách số nào</p>'}</div></div>
+          ${ordersHtml}
+        </div>
+      `;
+      document.getElementById('editProfileBtn')?.addEventListener('click', () => { currentView='settings'; renderCurrentView(); });
+      document.querySelectorAll('.viewOrderDetail').forEach(btn => btn.addEventListener('click', (e) => { const id = parseInt(btn.dataset.id); const order = ORDERS_DB.find(o=>o.id===id); alert(`Chi tiết đơn #${order.id}\nĐịa chỉ: ${order.address}\nSản phẩm: ${order.items.map(i=>`${i.title} x${i.quantity}`).join(', ')}\nTổng: ${order.total.toLocaleString()}đ`); }));
+    }
+
+    // Cài đặt trang cá nhân
+    function renderSettingsView(container) {
+      if(!currentUser) { currentView='login'; renderCurrentView(); return; }
+      container.innerHTML = `
+        <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow p-8">
+          <h2 class="text-2xl font-bold mb-6">Cài đặt trang cá nhân</h2>
+          <div class="space-y-4">
+            <div><label class="block font-medium">Avatar</label><input type="file" id="avatarInput" accept="image/*" class="border p-2 rounded w-full"><img id="avatarPreview" src="${currentUser.avatar || "https://ui-avatars.com/api/?background=4f46e5&color=fff&name="+encodeURIComponent(currentUser.username)}" class="w-20 h-20 rounded-full object-cover mt-2"></div>
+            <div><label class="block font-medium">Tên hiển thị</label><input type="text" id="displayName" class="w-full border p-2 rounded" value="${currentUser.username}"></div>
+            <div><label class="block font-medium">Email</label><input type="email" id="emailField" class="w-full border p-2 rounded bg-gray-100" value="${currentUser.email}" disabled></div>
+            <div><label class="block font-medium">Mật khẩu mới (để trống nếu không đổi)</label><input type="password" id="newPassword" class="w-full border p-2 rounded" placeholder="Nhập mật khẩu mới"></div>
+            <div class="flex gap-3 pt-4"><button id="saveSettingsBtn" class="bg-indigo-600 text-white px-6 py-2 rounded-xl">Lưu thay đổi</button><button id="cancelSettingsBtn" class="border border-gray-300 px-6 py-2 rounded-xl">Hủy</button></div>
+          </div>
+        </div>
+      `;
+      const avatarInput = document.getElementById('avatarInput');
+      const avatarPreview = document.getElementById('avatarPreview');
+      avatarInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if(file) {
+          const reader = new FileReader();
+          reader.onload = (ev) => avatarPreview.src = ev.target.result;
+          reader.readAsDataURL(file);
+        }
+      });
+      document.getElementById('saveSettingsBtn')?.addEventListener('click', async () => {
+        const newName = document.getElementById('displayName').value.trim();
+        const newPass = document.getElementById('newPassword').value;
+        let avatarBase64 = currentUser.avatar;
+        if(avatarInput.files[0]) avatarBase64 = await readFileAsBase64(avatarInput.files[0]);
+        const updates = { username: newName };
+        if(avatarBase64) updates.avatar = avatarBase64;
+        if(newPass) updates.password = newPass;
+        updateUser(currentUser.email, updates);
+        currentUser.username = newName;
+        if(newPass) currentUser.password = newPass;
+        if(avatarBase64) currentUser.avatar = avatarBase64;
+        saveSession();
+        showToast("Cập nhật thành công!", "success");
+        currentView = 'profile';
+        renderCurrentView();
+      });
+      document.getElementById('cancelSettingsBtn')?.addEventListener('click', () => { currentView='profile'; renderCurrentView(); });
+    }
+
+    // Các hàm còn lại (home, detail, cart, checkout, login, register, admin) được giữ nguyên nhưng bổ sung nút profile trong updateNavAuthUI
+    function renderHomeView(container) { /* giống code trước */ 
+      let filtered = [...BOOKS_DB];
+      if(filterOptions.type !== 'all') filtered = filtered.filter(b => b.type === filterOptions.type);
+      if(filterOptions.categoryId) filtered = filtered.filter(b => b.categoryId === +filterOptions.categoryId);
+      if(filterOptions.keyword) filtered = filtered.filter(b => b.title.toLowerCase().includes(filterOptions.keyword.toLowerCase()) || b.author.toLowerCase().includes(filterOptions.keyword.toLowerCase()));
+      if(filterOptions.author) filtered = filtered.filter(b => b.author.toLowerCase().includes(filterOptions.author.toLowerCase()));
+      if(filterOptions.minPrice) filtered = filtered.filter(b => b.price >= +filterOptions.minPrice);
+      if(filterOptions.maxPrice) filtered = filtered.filter(b => b.price <= +filterOptions.maxPrice);
+      const catFilterOpts = CATEGORIES_DB.map(c => `<option value="${c.id}" ${filterOptions.categoryId == c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+      const categoryChips = `<div class="flex flex-wrap gap-2 mb-6">
+        <button type="button" class="catChip px-3 py-1.5 rounded-full text-sm border ${!filterOptions.categoryId ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-300'}" data-cat="">Tất cả</button>
+        ${CATEGORIES_DB.map(c => `<button type="button" class="catChip px-3 py-1.5 rounded-full text-sm border ${filterOptions.categoryId == c.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-300'}" data-cat="${c.id}">${c.name}</button>`).join('')}
+      </div>`;
+      const advPanelHtml = `<div id="advancedSearchPanel" class="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 mb-8 ${isAdvancedOpen ? '' : 'hidden'}"><h4 class="font-semibold text-gray-700 mb-3">Tìm kiếm nâng cao</h4><div class="grid grid-cols-1 md:grid-cols-5 gap-4"><input type="text" id="advAuthor" placeholder="Tác giả" value="${filterOptions.author || ''}"><select id="advCategory"><option value="">Tất cả thể loại</option>${catFilterOpts}</select><select id="advType"><option value="all" ${filterOptions.type==='all'?'selected':''}>Tất cả loại sách</option><option value="physical" ${filterOptions.type==='physical'?'selected':''}>Sách vật lý</option><option value="ebook" ${filterOptions.type==='ebook'?'selected':''}>Sách số</option></select><input type="number" id="advMinPrice" placeholder="Giá từ" value="${filterOptions.minPrice || ''}"><input type="number" id="advMaxPrice" placeholder="Giá đến" value="${filterOptions.maxPrice || ''}"></div><div class="flex justify-end mt-4"><button id="applyFiltersBtn" class="bg-indigo-600 text-white px-4 py-1.5 rounded-lg">Áp dụng</button><button id="clearFiltersBtn" class="ml-2 bg-gray-100 px-4 py-1.5 rounded-lg">Xóa</button></div></div>`;
+      const catBadge = (book) => getCategoryName(book.categoryId) ? `<span class="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">${getCategoryName(book.categoryId)}</span>` : '';
+      let booksGrid = `<div class="grid grid-cols-2 md:grid-cols-4 gap-6">` + filtered.map(book => `<div class="book-card bg-white rounded-2xl shadow overflow-hidden" data-book-id="${book.id}"><img src="${getCoverUrl(book)}" class="h-56 w-full object-cover cursor-pointer book-cover-click" data-id="${book.id}"><div class="p-4"><h3 class="font-bold cursor-pointer book-title-click" data-id="${book.id}">${book.title}</h3><p class="text-sm text-gray-500">${book.author}</p><div class="flex flex-wrap gap-1 mt-1">${catBadge(book)}</div><div class="flex justify-between items-center mt-2"><span class="text-indigo-700 font-bold">${book.price.toLocaleString()}đ</span><span class="text-xs bg-gray-100 px-2 py-0.5 rounded-full">${book.type === 'ebook' ? '📘 Số' : '📖 Giấy'}</span></div><div class="flex gap-2 mt-3"><button class="preview-card-btn flex-1 border border-indigo-600 text-indigo-600 hover:bg-indigo-50 text-sm py-1.5 rounded-xl" data-id="${book.id}"><i class="fas fa-eye mr-1"></i>Đọc thử</button><button class="view-detail-btn flex-1 bg-gray-100 hover:bg-gray-200 text-sm py-1.5 rounded-xl" data-id="${book.id}">Chi tiết</button></div></div></div>`).join('') + `</div>`;
+      container.innerHTML = `<div class="mb-4"><h2 class="text-2xl font-bold">Khám phá sách</h2><p class="text-gray-500 text-sm mt-1">Lọc theo thể loại</p></div>${categoryChips}${advPanelHtml}<div>${booksGrid || '<p class="text-gray-500 text-center py-12">Không có sách phù hợp</p>'}</div>`;
+      document.querySelectorAll('.catChip').forEach(btn => btn.addEventListener('click', () => {
+        filterOptions.categoryId = btn.dataset.cat ? +btn.dataset.cat : '';
+        renderHomeView(container);
+      }));
+      document.getElementById('applyFiltersBtn')?.addEventListener('click', () => { filterOptions.type = document.getElementById('advType')?.value; filterOptions.author = document.getElementById('advAuthor')?.value; filterOptions.categoryId = document.getElementById('advCategory')?.value || ''; filterOptions.minPrice = document.getElementById('advMinPrice')?.value; filterOptions.maxPrice = document.getElementById('advMaxPrice')?.value; renderHomeView(container); });
+      document.getElementById('clearFiltersBtn')?.addEventListener('click', () => { filterOptions = { keyword: filterOptions.keyword, type:'all', minPrice:'', maxPrice:'', author:'', categoryId:'' }; renderHomeView(container); });
+      document.querySelectorAll('.view-detail-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); selectedBookId = parseInt(btn.dataset.id); currentView='detail'; renderCurrentView(); }));
+      document.querySelectorAll('.preview-card-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); openPreview(parseInt(btn.dataset.id)); }));
+      document.querySelectorAll('.book-cover-click, .book-title-click').forEach(el => el.addEventListener('click', () => { selectedBookId = parseInt(el.dataset.id); currentView='detail'; renderCurrentView(); }));
+    }
+
+    function renderDetailView(container) {
+      const book = BOOKS_DB.find(b=>b.id===selectedBookId);
+      if(!book) { currentView='home'; renderCurrentView(); return; }
+      const isEbook = book.type === 'ebook';
+      const alreadyOwned = currentUser && getUserLibrary(currentUser.email).some(lib => lib.bookId === book.id);
+      const catLabel = getCategoryName(book.categoryId);
+      container.innerHTML = `<div class="bg-white rounded-2xl shadow md:flex"><div class="md:w-2/5 p-6"><img src="${getCoverUrl(book)}" class="max-h-80 rounded-2xl shadow-lg w-full object-cover"></div><div class="md:w-3/5 p-6"><h1 class="text-3xl font-bold">${book.title}</h1><p class="text-gray-600">${book.author}</p><div class="flex flex-wrap gap-2 mt-2">${catLabel ? `<span class="inline-block bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">${catLabel}</span>` : ''}<span class="inline-block bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-sm">${isEbook ? '📘 Sách số' : '📖 Sách vật lý'}</span></div><p class="text-2xl font-bold text-indigo-600 mt-3">${book.price.toLocaleString()}đ</p><p class="text-gray-700 mt-3">${book.description || ''}</p><div class="flex flex-wrap gap-3 mt-6"><button id="previewBtn" class="border-2 border-indigo-600 text-indigo-600 px-5 py-2 rounded-xl hover:bg-indigo-50"><i class="fas fa-eye mr-1"></i> Đọc thử</button>${isEbook ? (alreadyOwned ? `<button id="readNowBtn" class="bg-green-600 text-white px-6 py-2 rounded-xl">Đọc ngay</button>` : `<button id="buyEbookBtn" class="bg-indigo-600 text-white px-6 py-2 rounded-xl">Mua sách số</button>`) : `<button id="detailAddToCart" class="bg-indigo-600 text-white px-6 py-2 rounded-xl">Thêm vào giỏ</button>`}<button id="backHomeBtn" class="border px-5 py-2 rounded-xl">Quay lại</button></div></div></div>`;
+      document.getElementById('previewBtn').addEventListener('click', () => openPreview(book.id));
+      if(isEbook) {
+        if(alreadyOwned) document.getElementById('readNowBtn')?.addEventListener('click', () => openReader(book.id, false));
+        else document.getElementById('buyEbookBtn')?.addEventListener('click', () => openPaymentModal({ type: 'ebook', bookId: book.id, price: book.price, title: book.title }));
+      } else {
+        document.getElementById('detailAddToCart')?.addEventListener('click', () => addToCart(book, 1));
+      }
+      document.getElementById('backHomeBtn')?.addEventListener('click', () => { currentView='home'; renderCurrentView(); });
+    }
+
+    const PAY_ACCOUNTS = { momo: { name: 'MoMo BookHeaven', number: '0901234567' }, zalopay: { name: 'ZaloPay BookHeaven', number: '0909876543' } };
+    function qrUrl(text) { return 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(text); }
+    function closePaymentModal() {
+      document.getElementById('paymentModal').style.display = 'none';
+      document.getElementById('paymentMethodSelection').classList.remove('hidden');
+      document.getElementById('paymentTransferSteps').classList.add('hidden');
+      document.getElementById('paymentTransferSteps').innerHTML = '';
+      pendingEBookPurchase = null;
+      pendingPhysicalOrderDraft = null;
+    }
+    function openPaymentModal(ctx) {
+      if(!currentUser) { showToast('Vui lòng đăng nhập', 'info'); currentView='login'; renderCurrentView(); return; }
+      if(ctx.type === 'ebook') pendingEBookPurchase = ctx;
+      else pendingPhysicalOrderDraft = ctx;
+      const amount = ctx.price || ctx.total;
+      document.getElementById('paymentModalTitle').innerText = ctx.type === 'ebook' ? 'Mua sách số' : 'Thanh toán đơn hàng';
+      document.getElementById('paymentAmountLabel').innerText = 'Số tiền: ' + amount.toLocaleString() + 'đ';
+      const phys = document.getElementById('paymentPhysicalFields');
+      const isPhys = ctx.type === 'physical';
+      phys.classList.toggle('hidden', !isPhys);
+      document.querySelectorAll('.payMethodBtn').forEach(b => {
+        b.classList.toggle('hidden', ctx.type === 'ebook' && b.dataset.pay === 'cod');
+      });
+      document.getElementById('paymentMethodSelection').classList.remove('hidden');
+      document.getElementById('paymentTransferSteps').classList.add('hidden');
+      document.getElementById('paymentModal').style.display = 'flex';
+    }
+    function validateShipping() {
+      const addr = document.getElementById('payAddress')?.value?.trim();
+      const phone = document.getElementById('payPhone')?.value?.trim();
+      if(!addr || !phone) { showToast('Nhập địa chỉ và số điện thoại người nhận', 'info'); return null; }
+      return { address: addr, phone };
+    }
+    function showTransferSteps(method, amount, orderRef, onConfirm) {
+      const key = method === 'MoMo' ? 'momo' : 'zalopay';
+      const acc = PAY_ACCOUNTS[key];
+      const content = 'BH ' + orderRef;
+      const qrData = acc.number + '|' + amount + '|' + content;
+      document.getElementById('paymentMethodSelection').classList.add('hidden');
+      const steps = document.getElementById('paymentTransferSteps');
+      steps.classList.remove('hidden');
+      steps.innerHTML = `
+        <div class="bg-gray-50 rounded-xl p-4 text-sm space-y-2">
+          <p class="font-bold text-lg">Các bước chuyển khoản ${method}</p>
+          <p><span class="font-semibold">Bước 1:</span> Mở ứng dụng ${method} trên điện thoại</p>
+          <p><span class="font-semibold">Bước 2:</span> Chọn Chuyển tiền → Nhập STK <strong>${acc.number}</strong> (${acc.name})</p>
+          <p><span class="font-semibold">Bước 3:</span> Nhập số tiền <strong>${amount.toLocaleString()}đ</strong></p>
+          <p><span class="font-semibold">Bước 4:</span> Nội dung: <strong>${content}</strong></p>
+          <p><span class="font-semibold">Bước 5:</span> Quét QR hoặc xác nhận chuyển khoản</p>
+          <div class="text-center my-3"><img src="${qrUrl(qrData)}" alt="QR" class="mx-auto border rounded-lg"><p class="text-xs text-gray-500 mt-1">Quét mã QR để chuyển khoản nhanh</p></div>
+          <button id="confirmTransferBtn" class="w-full bg-green-600 text-white py-3 rounded-xl font-semibold">Tôi đã chuyển khoản — Xác nhận</button>
+        </div>`;
+      document.getElementById('confirmTransferBtn').onclick = onConfirm;
+    }
+    function completeEbookPurchase(method, ship) {
+      const ctx = pendingEBookPurchase;
+      if(!ctx) return;
+      addBookToLibrary(currentUser.email, ctx.bookId);
+      ORDERS_DB.unshift({ id: Date.now(), userId: currentUser.email, customerName: currentUser.username, address: ship?.address || 'Sách số (tải về)', phone: ship?.phone || '-', paymentMethod: method, total: ctx.price, status: 'delivered', items: [{ title: ctx.title, price: ctx.price, quantity: 1, type: 'ebook' }], createdAt: new Date().toISOString() });
+      saveOrders();
+      showToast('Thanh toán thành công! Sách đã có trong Thư viện.', 'success');
+      closePaymentModal();
+      renderCurrentView();
+    }
+    function completePhysicalOrder(method, ship) {
+      const ctx = pendingPhysicalOrderDraft;
+      if(!ctx) return;
+      const items = ctx.items || cart.map(i => ({ title: i.book.title, price: i.book.price, quantity: i.quantity, type: 'physical' }));
+      ORDERS_DB.unshift({ id: Date.now(), userId: currentUser.email, customerName: currentUser.username, address: ship.address, phone: ship.phone, paymentMethod: method, total: ctx.total, status: method === 'COD' ? 'pending' : 'pending', items, createdAt: new Date().toISOString() });
+      saveOrders();
+      cart = []; saveCart(); updateCartBadge();
+      showToast(method === 'COD' ? 'Đặt hàng COD thành công!' : 'Đã ghi nhận chuyển khoản!', 'success');
+      closePaymentModal();
+      currentView = 'home';
+      renderCurrentView();
+    }
+    function handlePaymentMethod(methodKey) {
+      const isEbook = !!pendingEBookPurchase;
+      const amount = isEbook ? pendingEBookPurchase.price : pendingPhysicalOrderDraft?.total;
+      let ship = null;
+      if(!isEbook) {
+        ship = validateShipping();
+        if(!ship) return;
+      }
+      const methodLabel = methodKey === 'cod' ? 'COD' : (methodKey === 'momo' ? 'MoMo' : 'ZaloPay');
+      if(methodKey === 'cod') {
+        if(isEbook) { showToast('Sách số không hỗ trợ COD', 'info'); return; }
+        completePhysicalOrder('COD', ship);
+        return;
+      }
+      const ref = Date.now().toString().slice(-8);
+      showTransferSteps(methodLabel, amount, ref, () => {
+        if(isEbook) completeEbookPurchase(methodLabel, ship);
+        else completePhysicalOrder(methodLabel, ship);
+      });
+    }
+
+    function addToCart(book, qty) {
+      if(book.type !== 'physical') return;
+      const existing = cart.find(item => item.id === book.id);
+      if(existing) existing.quantity += qty;
+      else cart.push({ id: book.id, quantity: qty, book: {...book} });
+      saveCart(); updateCartBadge();
+      showToast(`Đã thêm ${book.title} vào giỏ`, 'success');
+    }
+    function renderCartView(container) { /* giữ nguyên nhưng rút gọn cho vừa */ 
+      if(cart.length===0) { container.innerHTML=`<div class="text-center py-16"><i class="fas fa-shopping-cart text-6xl text-gray-300"></i><p>Giỏ hàng trống</p><button id="shopNowCartBtn" class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-xl">Mua sắm</button></div>`;
+        document.getElementById('shopNowCartBtn')?.addEventListener('click',()=>{currentView='home';renderCurrentView();}); return; }
+      let total=0; let html=`<div class="bg-white rounded-2xl p-6 shadow"><h2 class="text-2xl font-bold mb-4"><i class="fas fa-shopping-cart text-indigo-500"></i> Giỏ hàng (Sách vật lý)</h2>`+cart.map(item=>{total+=item.book.price*item.quantity; return `<div class="flex justify-between items-center border-b py-3 gap-2"><div class="flex gap-3 items-center"><img src="${getCoverUrl(item.book)}" class="w-12 h-16 object-cover rounded"><span>${item.book.title}</span></div><div><button class="qtyMinus" data-id="${item.id}">-</button><span class="mx-2">${item.quantity}</span><button class="qtyPlus" data-id="${item.id}">+</button><button class="removeItem text-red-500 ml-2" data-id="${item.id}">Xóa</button></div><div class="font-semibold">${(item.book.price*item.quantity).toLocaleString()}đ</div></div>`;}).join('')+`<div class="text-right font-bold text-xl pt-4">Tổng: ${total.toLocaleString()}đ</div><button id="proceedCheckoutBtn" class="mt-4 bg-indigo-600 text-white w-full py-3 rounded-xl font-semibold">Tiến tục thanh toán</button></div>`;
+      container.innerHTML=html;
+      document.querySelectorAll('.qtyMinus').forEach(btn=>btn.addEventListener('click',()=>{const id=parseInt(btn.dataset.id); const item=cart.find(i=>i.id===id); if(item.quantity>1) { item.quantity--; saveCart(); updateCartBadge(); renderCartView(container); } else removeFromCart(id);}));
+      document.querySelectorAll('.qtyPlus').forEach(btn=>btn.addEventListener('click',()=>{const id=parseInt(btn.dataset.id); const item=cart.find(i=>i.id===id); item.quantity++; saveCart(); updateCartBadge(); renderCartView(container);}));
+      document.querySelectorAll('.removeItem').forEach(btn=>btn.addEventListener('click',()=>{removeFromCart(parseInt(btn.dataset.id)); renderCartView(container);}));
+      document.getElementById('proceedCheckoutBtn')?.addEventListener('click',()=>{if(!currentUser){showToast("Đăng nhập để thanh toán","info"); currentView='login'; renderCurrentView();} else currentView='checkout'; renderCurrentView();});
+    }
+    function removeFromCart(id) { cart = cart.filter(i=>i.id!==id); saveCart(); updateCartBadge(); }
+    function renderCheckoutView(container) {
+      if(!cart.length) { currentView='cart'; renderCurrentView(); return; }
+      const total = cart.reduce((s,i)=>s+i.book.price*i.quantity,0);
+      container.innerHTML=`<div class="max-w-lg mx-auto bg-white rounded-2xl p-6 shadow"><h2 class="text-2xl font-bold mb-2">Thanh toán sách vật lý</h2><p class="text-indigo-600 font-bold text-xl mb-4">Tổng: ${total.toLocaleString()}đ</p><p class="text-sm text-gray-600 mb-3">Thanh toán tiền mặt hoặc chuyển khoản đều cần địa chỉ và SĐT người nhận.</p><input id="checkoutAddress" placeholder="Địa chỉ nhận hàng *" class="w-full border rounded-xl p-3 mb-2"><input id="checkoutPhone" placeholder="Số điện thoại người nhận *" class="w-full border rounded-xl p-3 mb-4"><button id="payCodBtn" class="w-full bg-amber-500 text-white py-3 rounded-xl mb-2"><i class="fas fa-money-bill-wave mr-1"></i> Tiền mặt khi nhận (COD)</button><button id="payMomoCheckout" class="w-full bg-pink-500 text-white py-3 rounded-xl mb-2">Chuyển khoản MoMo</button><button id="payZaloCheckout" class="w-full bg-blue-500 text-white py-3 rounded-xl mb-2">Chuyển khoản ZaloPay</button><button id="backCartCheckout" class="w-full border py-2 rounded-xl mt-2">Quay lại giỏ hàng</button></div>`;
+      const getShip = () => {
+        const address = document.getElementById('checkoutAddress').value.trim();
+        const phone = document.getElementById('checkoutPhone').value.trim();
+        if(!address || !phone) { showToast('Nhập địa chỉ và số điện thoại', 'info'); return null; }
+        return { address, phone };
+      };
+      const startPhysPay = (methodKey) => {
+        const ship = getShip();
+        if(!ship) return;
+        pendingPhysicalOrderDraft = { type: 'physical', total, items: cart.map(i => ({ title: i.book.title, price: i.book.price, quantity: i.quantity, type: 'physical' })), ship };
+        document.getElementById('payAddress').value = ship.address;
+        document.getElementById('payPhone').value = ship.phone;
+        if(methodKey === 'cod') { completePhysicalOrder('COD', ship); }
+        else {
+          document.getElementById('paymentModal').style.display = 'flex';
+          document.getElementById('paymentModalTitle').innerText = 'Thanh toán đơn hàng';
+          document.getElementById('paymentAmountLabel').innerText = 'Số tiền: ' + total.toLocaleString() + 'đ';
+          document.getElementById('paymentPhysicalFields').classList.remove('hidden');
+          document.getElementById('paymentMethodSelection').classList.add('hidden');
+          const ref = Date.now().toString().slice(-8);
+          const methodLabel = methodKey === 'momo' ? 'MoMo' : 'ZaloPay';
+          showTransferSteps(methodLabel, total, ref, () => completePhysicalOrder(methodLabel, ship));
+        }
+      };
+      document.getElementById('payCodBtn')?.addEventListener('click', () => startPhysPay('cod'));
+      document.getElementById('payMomoCheckout')?.addEventListener('click', () => startPhysPay('momo'));
+      document.getElementById('payZaloCheckout')?.addEventListener('click', () => startPhysPay('zalopay'));
+      document.getElementById('backCartCheckout')?.addEventListener('click',()=>{currentView='cart';renderCurrentView();});
+    }
+    function renderLoginView(container) {
+      container.innerHTML=`<div class="max-w-md mx-auto bg-white rounded-2xl p-8"><h2 class="text-2xl font-bold text-center">Đăng nhập</h2><input id="loginEmail" placeholder="Email" class="w-full border p-2 rounded mt-3"><input id="loginPass" type="password" placeholder="Mật khẩu" class="w-full border p-2 rounded mt-3"><button id="doLoginBtn" class="mt-4 w-full bg-indigo-600 text-white py-2 rounded-xl">Đăng nhập</button><p class="text-center mt-3"><a id="gotoRegisterLink" class="text-indigo-600 cursor-pointer">Đăng ký</a></p></div>`;
+      document.getElementById('doLoginBtn')?.addEventListener('click',()=>{const email=document.getElementById('loginEmail').value, pwd=document.getElementById('loginPass').value, user=getUsers().find(u=>u.email===email && u.password===pwd); if(user){currentUser={...user}; saveSession(); showToast(`Chào ${currentUser.username}`,'success'); currentView='home'; renderCurrentView();} else showToast("Sai email hoặc mật khẩu",'info');});
+      document.getElementById('gotoRegisterLink')?.addEventListener('click',()=>{currentView='register';renderCurrentView();});
+    }
+    function renderRegisterView(container) {
+      container.innerHTML=`<div class="max-w-md mx-auto bg-white rounded-2xl p-8"><h2 class="text-2xl font-bold text-center">Đăng ký</h2><input id="regName" placeholder="Tên hiển thị" class="w-full border p-2 rounded mt-3"><input id="regEmail" placeholder="Email" class="w-full border p-2 rounded mt-3"><input id="regPass" type="password" placeholder="Mật khẩu" class="w-full border p-2 rounded mt-3"><button id="doRegisterBtn" class="mt-4 w-full bg-indigo-600 text-white py-2 rounded-xl">Đăng ký</button><p class="text-center mt-3"><a id="gotoLoginLink" class="text-indigo-600 cursor-pointer">Đã có tài khoản?</a></p></div>`;
+      document.getElementById('doRegisterBtn')?.addEventListener('click',()=>{const name=document.getElementById('regName').value, email=document.getElementById('regEmail').value, pwd=document.getElementById('regPass').value; if(!name||!email||!pwd){showToast("Vui lòng nhập đầy đủ","info");return;} if(getUsers().find(u=>u.email===email)){showToast("Email đã tồn tại","info");return;} addUser({username:name,email,password:pwd,avatar:null,createdAt:new Date().toISOString()}); showToast("Đăng ký thành công!","success"); currentView='login'; renderCurrentView();});
+      document.getElementById('gotoLoginLink')?.addEventListener('click',()=>{currentView='login';renderCurrentView();});
+    }
+
+    // Admin panel (rút gọn nhưng đầy đủ chức năng)
+    function renderAdminPanel(container) {
+      const totalRevenue = ORDERS_DB.filter(o => o.status === 'delivered').reduce((sum, o) => sum + o.total, 0);
+      const totalOrders = ORDERS_DB.length;
+      const totalBooksSold = ORDERS_DB.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0);
+      const totalUsers = USERS_DB.length;
+      let content = '';
+      if(adminSubView === 'dashboard') {
+        content = `<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8"><div class="bg-white p-6 rounded-2xl shadow"><p class="text-gray-500">Doanh thu</p><p class="text-2xl font-bold">${totalRevenue.toLocaleString()}đ</p></div><div class="bg-white p-6 rounded-2xl shadow"><p class="text-gray-500">Đơn hàng</p><p class="text-2xl font-bold">${totalOrders}</p></div><div class="bg-white p-6 rounded-2xl shadow"><p class="text-gray-500">Sách bán</p><p class="text-2xl font-bold">${totalBooksSold}</p></div><div class="bg-white p-6 rounded-2xl shadow"><p class="text-gray-500">Người dùng</p><p class="text-2xl font-bold">${totalUsers}</p></div></div><div class="bg-white rounded-2xl shadow p-6"><h3 class="text-xl font-bold mb-3">Đơn hàng gần đây</h3><table class="min-w-full"><thead><tr><th>ID</th><th>Khách</th><th>Tổng</th><th>Trạng thái</th></tr></thead><tbody>${ORDERS_DB.slice(0,5).map(o=>`<tr><td>#${o.id}</td><td>${o.customerName}</td><td>${o.total.toLocaleString()}đ</td><td>${o.status}</td></tr>`).join('')}</tbody></table></div>`;
+      } else if(adminSubView === 'books') {
+        content = `<div class="flex justify-between mb-4"><h2 class="text-2xl font-bold">Quản lý sách</h2><button id="adminAddBookBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-xl">+ Thêm sách</button></div><div class="grid grid-cols-1 md:grid-cols-3 gap-5">${BOOKS_DB.map(book=>`<div class="bg-white rounded-xl shadow p-3 flex gap-3"><img src="${getCoverUrl(book)}" class="w-20 h-28 object-cover rounded"><div><h3 class="font-bold">${book.title}</h3><p>${book.author}</p><p class="text-xs text-purple-700">${getCategoryName(book.categoryId) || 'Chưa phân loại'}</p><p>${book.price.toLocaleString()}đ</p><button class="adminEditBook text-blue-600" data-id="${book.id}">Sửa</button> <button class="adminDeleteBook text-red-600" data-id="${book.id}">Xóa</button></div></div>`).join('')}</div>`;
+      } else if(adminSubView === 'orders') {
+        content = `<div><h2 class="text-2xl font-bold mb-4">Quản lý đơn hàng</h2><table class="min-w-full bg-white rounded-2xl shadow"><thead><tr><th>ID</th><th>Khách</th><th>Địa chỉ</th><th>Tổng</th><th>Trạng thái</th><th></th></tr></thead><tbody>${ORDERS_DB.map(o=>`<tr><td>#${o.id}</td><td>${o.customerName}</td><td>${o.address}</td><td>${o.total.toLocaleString()}đ</td><td><select class="orderStatusSelect" data-id="${o.id}"><option ${o.status==='pending'?'selected':''}>pending</option><option ${o.status==='delivered'?'selected':''}>delivered</option></select></td><td><button class="viewOrderDetail" data-id="${o.id}">Chi tiết</button></td></tr>`).join('')}</tbody></table></div>`;
+      } else if(adminSubView === 'users') {
+        content = `<div><h2 class="text-2xl font-bold mb-4">Quản lý người dùng</h2><table class="min-w-full bg-white shadow rounded-2xl"><thead><tr><th>Tên</th><th>Email</th><th>Thao tác</th></tr></thead><tbody>${USERS_DB.map(u=>`<tr><td>${u.username}</td><td>${u.email}</td><td><button class="adminDeleteUser text-red-600" data-email="${u.email}">Xóa</button></td></tr>`).join('')}</tbody></table></div>`;
+      }
+      container.innerHTML = `<div class="flex flex-col md:flex-row gap-6"><div class="md:w-64 bg-white rounded-2xl shadow p-4"><h3 class="font-bold mb-3">Admin</h3><ul><li><button class="adminNavBtn w-full text-left p-2 ${adminSubView==='dashboard'?'bg-indigo-50 text-indigo-700':''}" data-view="dashboard">📊 Thống kê</button></li><li><button class="adminNavBtn w-full text-left p-2 ${adminSubView==='books'?'bg-indigo-50 text-indigo-700':''}" data-view="books">📚 Quản lý sách</button></li><li><button class="adminNavBtn w-full text-left p-2 ${adminSubView==='orders'?'bg-indigo-50 text-indigo-700':''}" data-view="orders">📦 Đơn hàng</button></li><li><button class="adminNavBtn w-full text-left p-2 ${adminSubView==='users'?'bg-indigo-50 text-indigo-700':''}" data-view="users">👥 Người dùng</button></li><li><button id="adminLogoutBtn" class="w-full text-left p-2 text-red-600">Đăng xuất</button></li></ul></div><div class="flex-1">${content}</div></div>`;
+      document.querySelectorAll('.adminNavBtn').forEach(btn=>btn.addEventListener('click',()=>{adminSubView=btn.dataset.view; renderCurrentView();}));
+      document.getElementById('adminLogoutBtn')?.addEventListener('click',()=>{isAdminLoggedIn=false; currentView='home'; renderCurrentView();});
+      if(adminSubView === 'books') {
+        document.getElementById('adminAddBookBtn')?.addEventListener('click',()=>showBookModal());
+        document.querySelectorAll('.adminEditBook').forEach(btn=>btn.addEventListener('click',()=>showBookModal(parseInt(btn.dataset.id))));
+        document.querySelectorAll('.adminDeleteBook').forEach(btn=>btn.addEventListener('click',()=>{if(confirm('Xóa?')){BOOKS_DB=BOOKS_DB.filter(b=>b.id!==parseInt(btn.dataset.id)); saveBooks(); renderCurrentView();}}));
+      }
+      if(adminSubView === 'orders') {
+        document.querySelectorAll('.orderStatusSelect').forEach(sel=>sel.addEventListener('change',()=>{const order=ORDERS_DB.find(o=>o.id===parseInt(sel.dataset.id)); if(order){order.status=sel.value; saveOrders(); showToast("Cập nhật trạng thái","success"); renderCurrentView();}}));
+        document.querySelectorAll('.viewOrderDetail').forEach(btn=>btn.addEventListener('click',()=>{const order=ORDERS_DB.find(o=>o.id===parseInt(btn.dataset.id)); alert(`Chi tiết đơn #${order.id}\nĐịa chỉ: ${order.address}\nSản phẩm: ${order.items.map(i=>`${i.title} x${i.quantity}`).join(', ')}`);}));
+      }
+      if(adminSubView === 'users') {
+        document.querySelectorAll('.adminDeleteUser').forEach(btn=>btn.addEventListener('click',()=>{if(confirm('Xóa người dùng?')){deleteUser(btn.dataset.email); renderCurrentView();}}));
+      }
+    }
+
+    async function showBookModal(bookId=null) {
+      const book = bookId ? BOOKS_DB.find(b=>b.id===bookId) : null;
+      const modalHtml = `<div id="bookModalOverlay" class="fixed inset-0 z-50 flex items-center justify-center modal-bg"><div class="bg-white rounded-2xl p-6 w-full max-w-lg"><h3 class="text-xl font-bold mb-4">${book?'Sửa sách':'Thêm sách'}</h3><input id="modalTitle" placeholder="Tên sách" class="w-full border p-2 rounded mb-2" value="${book?book.title:''}"><input id="modalAuthor" placeholder="Tác giả" class="w-full border p-2 rounded mb-2" value="${book?book.author:''}"><input id="modalPrice" placeholder="Giá" type="number" class="w-full border p-2 rounded mb-2" value="${book?book.price:''}"><label class="text-sm font-medium">Thể loại *</label><select id="modalCategory" class="w-full border p-2 rounded mb-2">${categoryOptionsHtml(book?.categoryId)}</select><select id="modalType" class="w-full border p-2 rounded mb-2"><option value="physical" ${book&&book.type==='physical'?'selected':''}>Sách vật lý</option><option value="ebook" ${book&&book.type==='ebook'?'selected':''}>Sách số</option></select><div><label>Ảnh bìa</label><input type="file" id="modalCoverFile" accept="image/*"></div><div id="pdfSection" class="${book?.type==='ebook'?'':'hidden'}"><label>PDF (sách số)</label><input type="file" id="modalPdfFile" accept="application/pdf"></div><textarea id="modalDesc" placeholder="Mô tả" class="w-full border p-2 rounded mb-2">${book?book.description:''}</textarea><textarea id="modalFullText" placeholder="Nội dung sách số" class="w-full border p-2 rounded mb-2">${book?book.fullText:''}</textarea><div class="flex justify-end gap-2"><button id="modalCancel" class="px-4 py-2 bg-gray-200 rounded">Hủy</button><button id="modalSave" class="px-4 py-2 bg-indigo-600 text-white rounded">Lưu</button></div></div></div>`;
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
+      const overlay = document.getElementById('bookModalOverlay');
+      const typeSelect = document.getElementById('modalType');
+      const pdfSection = document.getElementById('pdfSection');
+      typeSelect.addEventListener('change',()=>{pdfSection.classList.toggle('hidden', typeSelect.value!=='ebook');});
+      const closeModal = () => overlay.remove();
+      document.getElementById('modalCancel')?.addEventListener('click',closeModal);
+      document.getElementById('modalSave')?.addEventListener('click',async()=>{
+        const title=document.getElementById('modalTitle').value.trim(), author=document.getElementById('modalAuthor').value.trim(), price=parseInt(document.getElementById('modalPrice').value), type=document.getElementById('modalType').value, desc=document.getElementById('modalDesc').value, fullText=document.getElementById('modalFullText').value||null;
+        const categoryId = document.getElementById('modalCategory').value ? +document.getElementById('modalCategory').value : null;
+        if(!title||!author||isNaN(price)){showToast("Nhập đủ thông tin","info"); return;}
+        if(!categoryId){showToast("Chọn thể loại cho sách","info"); return;}
+        let coverBase64=book?book.coverBase64:null;
+        if(document.getElementById('modalCoverFile').files[0]) coverBase64=await readFileAsBase64(document.getElementById('modalCoverFile').files[0]);
+        let pdfBase64=book?book.pdfBase64:null;
+        if(type==='ebook' && document.getElementById('modalPdfFile').files[0]) pdfBase64=await readFileAsBase64(document.getElementById('modalPdfFile').files[0]);
+        if(book){
+          Object.assign(book,{title,author,price,type,categoryId,description:desc,fullText,coverBase64,pdfBase64,coverUrl:coverBase64?null:(book.coverUrl||null)});
+          saveBooks(); showToast("Cập nhật thành công","success");
+        } else {
+          const newId=Math.max(0,...BOOKS_DB.map(b=>b.id))+1;
+          BOOKS_DB.push({id:newId,title,author,price,type,categoryId,coverBase64,coverUrl:null,description:desc,fullText,pdfBase64});
+          saveBooks(); showToast("Thêm sách thành công","success");
+        }
+        closeModal();
+        renderCurrentView();
+      });
+    }
+
+    async function readFileAsBase64(file) {
+      return new Promise((resolve,reject)=>{const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=reject; reader.readAsDataURL(file);});
+    }
+
+    function updateNavAuthUI() {
+      const authDiv = document.getElementById('authSection');
+      if(currentUser) {
+        authDiv.innerHTML = `<span class="text-sm hidden sm:inline">👋 ${currentUser.username}</span><button id="profileNavBtn" class="text-gray-600 hover:text-indigo-600"><i class="fas fa-user-circle text-xl"></i></button><button id="logoutBtn" class="bg-gray-200 px-3 py-1 rounded-full text-sm ml-2">Thoát</button>`;
+        document.getElementById('profileNavBtn')?.addEventListener('click', () => { currentView='profile'; renderCurrentView(); });
+        document.getElementById('logoutBtn')?.addEventListener('click', () => { currentUser=null; saveSession(); cart=[]; saveCart(); updateCartBadge(); showToast("Đã đăng xuất","info"); currentView='home'; renderCurrentView(); });
+      } else {
+        authDiv.innerHTML = `<button id="loginNavBtn" class="text-indigo-600 font-medium">Đăng nhập</button><button id="registerNavBtn" class="bg-indigo-600 text-white px-3 py-1.5 rounded-full text-sm ml-2">Đăng ký</button>`;
+        document.getElementById('loginNavBtn')?.addEventListener('click',()=>{currentView='login';renderCurrentView();});
+        document.getElementById('registerNavBtn')?.addEventListener('click',()=>{currentView='register';renderCurrentView();});
+      }
+    }
+
+    function initGlobalEvents() {
+      document.getElementById('globalSearchInput')?.addEventListener('input', (e) => { filterOptions.keyword = e.target.value; if(currentView === 'home') renderCurrentView(); });
+      document.getElementById('toggleAdvancedBtn')?.addEventListener('click', () => { isAdvancedOpen = !isAdvancedOpen; renderCurrentView(); });
+      document.getElementById('cartIconBtn')?.addEventListener('click', () => { currentView='cart'; renderCurrentView(); });
+      document.getElementById('navHomeBtn')?.addEventListener('click', () => { currentView='home'; renderCurrentView(); });
+      document.getElementById('libraryBtn')?.addEventListener('click', () => { currentView='library'; renderCurrentView(); });
+      document.getElementById('adminSwitchBtn')?.addEventListener('click', () => { window.location.href = '/admin'; });
+      document.querySelectorAll('.payMethodBtn').forEach(btn => btn.addEventListener('click', () => handlePaymentMethod(btn.dataset.pay)));
+      document.getElementById('cancelPayment')?.addEventListener('click', closePaymentModal);
+      // mobile search
+      const mobileBtn = document.getElementById('mobileSearchBtn'), mobilePanel = document.getElementById('mobileSearchPanel');
+      if(mobileBtn && mobilePanel) mobileBtn.addEventListener('click', () => { if(mobilePanel.innerHTML === '') mobilePanel.innerHTML = `<div class="flex gap-2"><input type="text" id="mobileSearchInput" class="flex-1 border rounded-full py-2 px-4"><button id="mobileSearchApply" class="bg-indigo-600 text-white px-4 rounded-full">Tìm</button></div>`; mobilePanel.classList.toggle('hidden'); document.getElementById('mobileSearchApply')?.addEventListener('click', () => { const val = document.getElementById('mobileSearchInput')?.value||''; filterOptions.keyword = val; if(document.getElementById('globalSearchInput')) document.getElementById('globalSearchInput').value = val; if(currentView==='home') renderCurrentView(); mobilePanel.classList.add('hidden'); }); });
+    }
+
+    function init() {
+      loadCategories();
+      loadBooks();
+      loadOrders();
+      loadCart();
+      loadSession();
+      saveUsers();
+      loadLibrary();
+      initGlobalEvents();
+      renderCurrentView();
+    }
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BookHeaven Admin</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        :root{
+            --bh-indigo: #4f46e5;
+            --bh-indigo-600: #4f46e5;
+            --bh-indigo-700: #4338ca;
+            --bh-bg: #f5f7fb;
+            --bh-card: #ffffff;
+            --bh-muted: #6b7280;
+        }
+        body { background: var(--bh-bg); }
+        .bh-sidebar {
+            background: linear-gradient(180deg, var(--bh-indigo-700), var(--bh-indigo-600));
+            color: #fff;
+            min-height: 100vh;
+        }
+        .bh-brand {
+            font-weight: 800;
+            letter-spacing: .2px;
+        }
+        .bh-nav a{
+            color: rgba(255,255,255,.9);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            padding: .65rem .75rem;
+            border-radius: .75rem;
+        }
+        .bh-nav a:hover{ background: rgba(255,255,255,.12); }
+        .bh-nav a.active{ background: rgba(255,255,255,.18); }
+        .bh-card{
+            background: var(--bh-card);
+            border: 0;
+            border-radius: 1rem;
+            box-shadow: 0 10px 30px rgba(17,24,39,.06);
+        }
+        .bh-kpi{
+            display:flex; align-items:center; justify-content:space-between; gap:1rem;
+        }
+        .bh-kpi .label{ color: var(--bh-muted); font-size:.85rem; }
+        .bh-kpi .value{ font-weight:800; font-size:1.35rem; }
+        .bh-pill{
+            display:inline-flex; align-items:center;
+            border-radius:999px; padding:.2rem .6rem; font-size:.8rem;
+            background: rgba(79,70,229,.12); color: var(--bh-indigo-700);
+            border: 1px solid rgba(79,70,229,.18);
+        }
+        .bh-table thead th{
+            color:#111827;
+            font-weight:700;
+            font-size:.85rem;
+            border-bottom: 1px solid rgba(17,24,39,.08);
+        }
+        .bh-table tbody td{ vertical-align: middle; }
+        .bh-pagination .page-link{ border-radius: .75rem; }
+        .bh-topbar{
+            background: rgba(255,255,255,.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(17,24,39,.06);
+            border-radius: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row g-0">
+            <!-- Sidebar -->
+            <aside class="col-12 col-md-3 col-xl-2 p-3 bh-sidebar">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="bh-brand">
+                        Book<span style="color: rgba(255,255,255,.9)">Heaven</span>
+                        <div class="small" style="opacity:.85">Admin</div>
+                    </div>
+                </div>
+
+                <nav class="bh-nav d-grid gap-1">
+                    <a class="active" href="/admin">Dashboard</a>
+                    <a href="/add">Add book</a>
+                    <a href="/select-book">Update book</a>
+                    <a href="/delete">Delete book</a>
+                    <a href="/booklist">Public book list</a>
+                </nav>
+
+                <div class="mt-4 p-3 rounded-4" style="background: rgba(255,255,255,.12);">
+                    <div class="small" style="opacity:.9">Signed in as</div>
+                    <div class="fw-semibold">ADMIN</div>
+                    <form class="mt-3" th:action="@{/logout}" method="post">
+                        <button class="btn btn-outline-light w-100" type="submit">Logout</button>
+                    </form>
+                </div>
+            </aside>
+
+            <!-- Main -->
+            <main class="col-12 col-md-9 col-xl-10 p-3 p-md-4">
+                <div class="bh-topbar p-3 p-md-4 mb-4">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                        <div>
+                            <h3 class="mb-1">Dashboard</h3>
+                            <div class="text-muted">Book catalog overview</div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <a class="btn btn-outline-secondary" href="/">Home</a>
+                            <span class="bh-pill" th:text="'Total items: ' + ${totalElements}">Total items: 0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI cards -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="bh-card p-3 p-md-4">
+                            <div class="bh-kpi">
+                                <div>
+                                    <div class="label">Total books</div>
+                                    <div class="value" th:text="${totalBooks}">0</div>
+                                </div>
+                                <div class="bh-pill">Catalog</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="bh-card p-3 p-md-4">
+                            <div class="bh-kpi">
+                                <div>
+                                    <div class="label">Total stock</div>
+                                    <div class="value" th:text="${totalStock}">0</div>
+                                </div>
+                                <div class="bh-pill">Units</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="bh-card p-3 p-md-4">
+                            <div class="bh-kpi">
+                                <div>
+                                    <div class="label">Out of stock</div>
+                                    <div class="value" th:text="${outOfStock}">0</div>
+                                </div>
+                                <div class="bh-pill" style="background: rgba(239,68,68,.12); color:#b91c1c; border-color: rgba(239,68,68,.18)">Alert</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="bh-card p-3 p-md-4">
+                            <div class="bh-kpi">
+                                <div>
+                                    <div class="label">Inventory value</div>
+                                    <div class="value" th:text="${#numbers.formatDecimal(inventoryValue, 0, 'COMMA', 0, 'POINT')} + 'đ'">0đ</div>
+                                </div>
+                                <div class="bh-pill">Value</div>
+                            </div>
+                            <div class="text-muted mt-2 small">
+                                Avg price:
+                                <span class="fw-semibold" th:text="${#numbers.formatDecimal(avgPrice, 0, 'COMMA', 0, 'POINT')} + 'đ'">0đ</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table + pagination -->
+                <div class="bh-card p-0 overflow-hidden">
+                    <div class="p-3 p-md-4 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2" style="border-color: rgba(17,24,39,.06) !important;">
+                        <div class="fw-bold">Books</div>
+                        <form class="d-flex align-items-center gap-2" method="get" action="/admin">
+                            <input type="hidden" name="page" th:value="${currentPage}">
+                            <label class="text-muted small">Rows</label>
+                            <select name="size" class="form-select form-select-sm" style="width: 90px;">
+                                <option th:selected="${pageSize == 10}" value="10">10</option>
+                                <option th:selected="${pageSize == 20}" value="20">20</option>
+                                <option th:selected="${pageSize == 50}" value="50">50</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-secondary" type="submit">Apply</button>
+                        </form>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 bh-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 90px;">ID</th>
+                                    <th>Title</th>
+                                    <th style="width: 220px;">Author</th>
+                                    <th style="width: 140px;">Price</th>
+                                    <th style="width: 120px;">Stock</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:if="${#lists.isEmpty(books)}">
+                                    <td colspan="5" class="text-center text-muted py-4">No books available</td>
+                                </tr>
+                                <tr th:each="book : ${books}">
+                                    <td class="fw-semibold" th:text="${book.id}">1</td>
+                                    <td>
+                                        <div class="fw-semibold" th:text="${book.title}">Title</div>
+                                        <div class="text-muted small" th:text="${book.imageUrl}">imageUrl</div>
+                                    </td>
+                                    <td th:text="${book.author}">Author</td>
+                                    <td th:text="${#numbers.formatDecimal(book.price, 0, 'COMMA', 0, 'POINT')} + 'đ'">0đ</td>
+                                    <td>
+                                        <span th:if="${book.stock > 0}" class="bh-pill" th:text="${book.stock}">0</span>
+                                        <span th:if="${book.stock <= 0}" class="bh-pill" style="background: rgba(239,68,68,.12); color:#b91c1c; border-color: rgba(239,68,68,.18)">0</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="p-3 p-md-4 border-top d-flex flex-wrap justify-content-between align-items-center gap-2" style="border-color: rgba(17,24,39,.06) !important;">
+                        <div class="text-muted small">
+                            Page <span class="fw-semibold" th:text="${currentPage + 1}">1</span>
+                            of <span class="fw-semibold" th:text="${totalPages}">1</span>
+                        </div>
+                        <nav class="bh-pagination" aria-label="Book pagination" th:if="${totalPages > 1}">
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
+                                    <a class="page-link" th:href="@{/admin(page=${currentPage-1},size=${pageSize})}">Prev</a>
+                                </li>
+                                <li class="page-item" th:each="p : ${#numbers.sequence(0, totalPages-1)}"
+                                    th:if="${totalPages <= 8 || (p >= currentPage-2 && p <= currentPage+2) || p == 0 || p == totalPages-1}"
+                                    th:classappend="${p == currentPage} ? 'active'">
+                                    <a class="page-link" th:href="@{/admin(page=${p},size=${pageSize})}" th:text="${p+1}">1</a>
+                                </li>
+                                <li class="page-item" th:classappend="${currentPage >= totalPages-1} ? 'disabled'">
+                                    <a class="page-link" th:href="@{/admin(page=${currentPage+1},size=${pageSize})}">Next</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

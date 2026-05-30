@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BookHeaven Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    body { background: #f5f7fb; }
+    .sidebar { background: linear-gradient(180deg, #4338ca, #4f46e5); min-height: 100vh; }
+    .modal-bg { background: rgba(0,0,0,.5); backdrop-filter: blur(3px); }
+    .cover-preview { max-width: 100px; max-height: 120px; object-fit: cover; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+      <h1 class="text-2xl font-bold text-center mb-1">Book<span class="text-indigo-600">Heaven</span> Admin</h1>
+      <p class="text-center text-gray-500 mb-6">Đăng nhập quản trị</p>
+      <input id="adminLoginEmail" type="email" value="bookheaven@gmail.com" placeholder="Email" class="w-full border rounded-xl p-3 mb-3">
+      <input id="adminLoginPass" type="password" placeholder="Mật khẩu" class="w-full border rounded-xl p-3 mb-4">
+      <button id="adminDoLogin" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold">Đăng nhập</button>
+      <a href="/" class="block text-center text-indigo-600 mt-4">← Về cửa hàng</a>
+    </div>
+  </div>
+
+  <div id="adminApp" class="hidden">
+    <div class="flex flex-col md:flex-row">
+      <aside class="sidebar text-white w-full md:w-64 p-4 shrink-0">
+        <div class="font-bold text-xl mb-6">Book<span class="opacity-90">Heaven</span><div class="text-sm font-normal opacity-80">Admin Panel</div></div>
+        <nav class="space-y-1">
+          <button class="navBtn w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/10" data-view="dashboard"><i class="fas fa-chart-line mr-2"></i> Thống kê</button>
+          <button class="navBtn w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/10" data-view="categories"><i class="fas fa-tags mr-2"></i> Thể loại</button>
+          <button class="navBtn w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/10" data-view="books"><i class="fas fa-book mr-2"></i> Quản lý sách</button>
+          <button class="navBtn w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/10" data-view="orders"><i class="fas fa-truck mr-2"></i> Đơn hàng</button>
+          <button class="navBtn w-full text-left px-3 py-2.5 rounded-xl hover:bg-white/10" data-view="users"><i class="fas fa-users mr-2"></i> Người dùng</button>
+        </nav>
+        <div class="mt-8 pt-4 border-t border-white/20">
+          <button id="adminLogout" class="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-red-200"><i class="fas fa-sign-out-alt mr-2"></i> Đăng xuất</button>
+          <a href="/" class="block mt-2 px-3 py-2 text-sm opacity-90 hover:opacity-100">← Cửa hàng</a>
+        </div>
+      </aside>
+      <main class="flex-1 p-4 md:p-6 min-w-0">
+        <div id="adminContent"></div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const ADMIN_EMAIL = 'bookheaven@gmail.com';
+    const ADMIN_PASSWORD = 'Admin123';
+
+    let BOOKS_DB = [];
+    let CATEGORIES_DB = [];
+    let ORDERS_DB = [];
+    let USERS_DB = [];
+
+    const DEFAULT_CATEGORIES = [
+      { id: 1, name: 'Văn học', slug: 'van-hoc' },
+      { id: 2, name: 'Khoa học viễn tưởng', slug: 'khoa-hoc-vien-tuong' },
+      { id: 3, name: 'Lập trình & Công nghệ', slug: 'lap-trinh' },
+      { id: 4, name: 'Phát triển bản thân', slug: 'phat-trien-ban-than' },
+      { id: 5, name: 'Kinh doanh', slug: 'kinh-doanh' }
+    ];
+    let adminView = 'dashboard';
+    let salesChart = null;
+
+    function loadCategories() {
+      const c = localStorage.getItem('bookheaven_categories');
+      CATEGORIES_DB = c ? JSON.parse(c) : [];
+      if (!CATEGORIES_DB.length) {
+        CATEGORIES_DB = [...DEFAULT_CATEGORIES];
+        saveCategories();
+      }
+    }
+    function saveCategories() { localStorage.setItem('bookheaven_categories', JSON.stringify(CATEGORIES_DB)); }
+    function getCategoryName(id) {
+      if (!id) return 'Chưa phân loại';
+      const cat = CATEGORIES_DB.find(c => c.id === id);
+      return cat ? cat.name : 'Chưa phân loại';
+    }
+    function categoryOptionsHtml(selectedId) {
+      const sel = selectedId ? +selectedId : '';
+      return `<option value="">-- Chọn thể loại --</option>` +
+        CATEGORIES_DB.map(c => `<option value="${c.id}" ${sel === c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+    }
+
+    function loadAll() {
+      loadCategories();
+      const b = localStorage.getItem('bookheaven_books');
+      BOOKS_DB = b ? JSON.parse(b) : [];
+      if (!BOOKS_DB.length) {
+        BOOKS_DB = [
+          { id: 1, title: 'Đại gia Gatsby', author: 'F. Scott Fitzgerald', price: 125000, type: 'physical', stock: 10, categoryId: 1, coverUrl: 'https://picsum.photos/id/20/300/400', description: 'Kiệt tác văn học.', previewText: 'Đoạn đọc thử: Nick Carraway kể về thế giới xa hoa...', fullText: null },
+          { id: 2, title: 'JavaScript Tinh hoa', author: 'Douglas Crockford', price: 89000, type: 'ebook', stock: 999, categoryId: 3, coverUrl: 'https://picsum.photos/id/1/300/400', description: 'Sách số lập trình.', previewText: null, fullText: 'Chương 1: JavaScript là ngôn ngữ linh hoạt trên trình duyệt. '.repeat(50) }
+        ];
+        saveBooks();
+      }
+      ORDERS_DB = JSON.parse(localStorage.getItem('bookheaven_orders') || '[]');
+      if (!localStorage.getItem('bookheaven_users')) {
+        USERS_DB = [{ username: 'Nguyễn Văn A', email: 'demo@example.com', password: '123456', createdAt: new Date().toISOString() }];
+        localStorage.setItem('bookheaven_users', JSON.stringify(USERS_DB));
+      } else USERS_DB = JSON.parse(localStorage.getItem('bookheaven_users'));
+    }
+    function saveBooks() { localStorage.setItem('bookheaven_books', JSON.stringify(BOOKS_DB)); }
+    function saveOrders() { localStorage.setItem('bookheaven_orders', JSON.stringify(ORDERS_DB)); }
+    function saveUsers() { localStorage.setItem('bookheaven_users', JSON.stringify(USERS_DB)); }
+    function getCover(b) { return b.coverBase64 || b.coverUrl || 'https://picsum.photos/id/1/300/400'; }
+    function toast(msg, ok) {
+      const t = document.createElement('div');
+      t.className = `fixed bottom-5 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-xl text-white text-sm ${ok ? 'bg-green-600' : 'bg-indigo-600'}`;
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2500);
+    }
+
+    async function extractFromPdf(file) {
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      let text = '';
+      const pages = Math.min(pdf.numPages, 5);
+      for (let i = 1; i <= pages; i++) {
+        const page = await pdf.getPage(i);
+        const c = await page.getTextContent();
+        text += c.items.map(it => it.str).join(' ') + '\n';
+      }
+      const previewLen = Math.max(Math.floor(text.length * 0.1), 300);
+      return { fullText: text, previewText: text.substring(0, previewLen) + (text.length > previewLen ? '\n\n...(10% nội dung đọc thử)' : '') };
+    }
+    function readB64(file) {
+      return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+    }
+
+    function render() {
+      const el = document.getElementById('adminContent');
+      document.querySelectorAll('.navBtn').forEach(b => {
+        b.classList.toggle('bg-white/20', b.dataset.view === adminView);
+      });
+      if (adminView === 'dashboard') renderDashboard(el);
+      else if (adminView === 'categories') renderCategories(el);
+      else if (adminView === 'books') renderBooks(el);
+      else if (adminView === 'orders') renderOrders(el);
+      else if (adminView === 'users') renderUsers(el);
+    }
+
+    function renderDashboard(el) {
+      const rev = ORDERS_DB.filter(o => o.status === 'delivered').reduce((s, o) => s + o.total, 0);
+      const sold = ORDERS_DB.reduce((s, o) => s + o.items.reduce((a, i) => a + i.quantity, 0), 0);
+      el.innerHTML = `
+        <h2 class="text-2xl font-bold mb-4">Thống kê</h2>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div class="bg-white p-5 rounded-2xl shadow-sm"><p class="text-gray-500 text-sm">Doanh thu</p><p class="text-2xl font-bold text-indigo-600">${rev.toLocaleString()}đ</p></div>
+          <div class="bg-white p-5 rounded-2xl shadow-sm"><p class="text-gray-500 text-sm">Đơn hàng</p><p class="text-2xl font-bold">${ORDERS_DB.length}</p></div>
+          <div class="bg-white p-5 rounded-2xl shadow-sm"><p class="text-gray-500 text-sm">Sách đã bán</p><p class="text-2xl font-bold">${sold}</p></div>
+          <div class="bg-white p-5 rounded-2xl shadow-sm"><p class="text-gray-500 text-sm">Người dùng</p><p class="text-2xl font-bold">${USERS_DB.length}</p></div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm p-5 mb-6"><h3 class="font-bold mb-3">Doanh thu 6 tháng</h3><canvas id="chartRev" height="120"></canvas></div>
+        <div class="bg-white rounded-2xl shadow-sm p-5 overflow-x-auto"><h3 class="font-bold mb-3">Đơn gần đây</h3>
+          <table class="min-w-full text-sm"><thead><tr class="border-b"><th class="text-left py-2">Mã</th><th>Khách</th><th>SĐT</th><th>Tổng</th><th>TT</th></tr></thead>
+          <tbody>${ORDERS_DB.slice(0, 8).map(o => `<tr class="border-b"><td>#${o.id}</td><td>${o.customerName}</td><td>${o.phone || '-'}</td><td>${o.total.toLocaleString()}đ</td><td>${o.status}</td></tr>`).join('') || '<tr><td colspan="5" class="py-4 text-gray-400">Chưa có đơn</td></tr>'}</tbody></table>
+        </div>`;
+      setTimeout(() => {
+        const ctx = document.getElementById('chartRev');
+        if (!ctx) return;
+        if (salesChart) salesChart.destroy();
+        salesChart = new Chart(ctx, { type: 'bar', data: { labels: ['T1','T2','T3','T4','T5','T6'], datasets: [{ label: 'VNĐ', data: [3e6,4.2e6,3.9e6,5.1e6,4.8e6,6.2e6], backgroundColor: '#4f46e5' }] } });
+      }, 50);
+    }
+
+    function renderCategories(el) {
+      el.innerHTML = `
+        <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+          <h2 class="text-2xl font-bold">Quản lý thể loại</h2>
+          <button id="btnAddCategory" class="bg-indigo-600 text-white px-4 py-2 rounded-xl"><i class="fas fa-plus mr-1"></i> Thêm thể loại</button>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left">Tên thể loại</th><th class="px-4 py-3 text-left">Số sách</th><th class="px-4 py-3 text-right">Thao tác</th></tr></thead>
+            <tbody>
+              ${CATEGORIES_DB.map(c => {
+                const count = BOOKS_DB.filter(b => b.categoryId === c.id).length;
+                return `<tr class="border-t"><td class="px-4 py-3 font-medium">${c.name}</td><td class="px-4 py-3 text-gray-500">${count}</td>
+                  <td class="px-4 py-3 text-right"><button class="editCat text-blue-600 mr-3" data-id="${c.id}">Sửa</button>
+                  <button class="delCat text-red-600" data-id="${c.id}">Xóa</button></td></tr>`;
+              }).join('') || '<tr><td colspan="3" class="p-6 text-center text-gray-400">Chưa có thể loại</td></tr>'}
+            </tbody>
+          </table>
+        </div>`;
+      document.getElementById('btnAddCategory')?.addEventListener('click', () => openCategoryModal());
+      document.querySelectorAll('.editCat').forEach(btn => btn.addEventListener('click', () => openCategoryModal(+btn.dataset.id)));
+      document.querySelectorAll('.delCat').forEach(btn => btn.addEventListener('click', () => {
+        const id = +btn.dataset.id;
+        if (BOOKS_DB.some(b => b.categoryId === id)) { toast('Không xóa được — còn sách thuộc thể loại này', false); return; }
+        if (!confirm('Xóa thể loại này?')) return;
+        CATEGORIES_DB = CATEGORIES_DB.filter(c => c.id !== id);
+        saveCategories();
+        render();
+        toast('Đã xóa thể loại', true);
+      }));
+    }
+
+    function openCategoryModal(id) {
+      const cat = id ? CATEGORIES_DB.find(c => c.id === id) : null;
+      const html = `
+        <div id="catModal" class="fixed inset-0 z-50 flex items-center justify-center modal-bg p-4">
+          <div class="bg-white rounded-2xl p-6 w-full max-w-md">
+            <h3 class="text-xl font-bold mb-4">${cat ? 'Sửa thể loại' : 'Thêm thể loại'}</h3>
+            <input id="catName" class="w-full border rounded-lg p-2" placeholder="Tên thể loại (vd: Văn học)" value="${cat?.name || ''}">
+            <div class="flex justify-end gap-2 mt-4">
+              <button id="catCancel" class="px-4 py-2 bg-gray-200 rounded-lg">Hủy</button>
+              <button id="catSave" class="px-4 py-2 bg-indigo-600 text-white rounded-lg">Lưu</button>
+            </div>
+          </div>
+        </div>`;
+      document.body.insertAdjacentHTML('beforeend', html);
+      const close = () => document.getElementById('catModal')?.remove();
+      document.getElementById('catCancel').onclick = close;
+      document.getElementById('catSave').onclick = () => {
+        const name = document.getElementById('catName').value.trim();
+        if (!name) { toast('Nhập tên thể loại', false); return; }
+        if (CATEGORIES_DB.some(c => c.name.toLowerCase() === name.toLowerCase() && c.id !== (cat?.id || 0))) {
+          toast('Tên thể loại đã tồn tại', false); return;
+        }
+        const slug = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        if (cat) cat.name = name;
+        else CATEGORIES_DB.push({ id: Math.max(0, ...CATEGORIES_DB.map(c => c.id), 0) + 1, name, slug });
+        saveCategories();
+        close();
+        render();
+        toast('Lưu thể loại thành công', true);
+      };
+    }
+
+    function renderBooks(el) {
+      if (!CATEGORIES_DB.length) loadCategories();
+      el.innerHTML = `
+        <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+          <h2 class="text-2xl font-bold">Quản lý sách</h2>
+          <button id="btnAddBook" class="bg-indigo-600 text-white px-4 py-2 rounded-xl" ${CATEGORIES_DB.length ? '' : 'disabled title="Thêm thể loại trước"'}><i class="fas fa-plus mr-1"></i> Thêm sách</button>
+        </div>
+        ${!CATEGORIES_DB.length ? '<p class="text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-sm">Hãy tạo ít nhất một thể loại trước khi thêm sách.</p>' : ''}
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          ${BOOKS_DB.map(b => `
+            <div class="bg-white rounded-2xl shadow-sm p-4 flex gap-3">
+              <img src="${getCover(b)}" class="w-20 h-28 object-cover rounded-lg">
+              <div class="flex-1 min-w-0">
+                <h3 class="font-bold truncate">${b.title}</h3>
+                <p class="text-sm text-gray-500">${b.author}</p>
+                <p class="text-indigo-600 font-semibold">${b.price.toLocaleString()}đ</p>
+                <span class="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">${getCategoryName(b.categoryId)}</span>
+                <span class="text-xs bg-gray-100 px-2 py-0.5 rounded-full ml-1">${b.type === 'ebook' ? '📘 Số' : '📖 Vật lý'}</span>
+                <div class="flex flex-wrap gap-2 mt-2">
+                  <button class="adminPreviewBook text-indigo-600 text-sm" data-id="${b.id}"><i class="fas fa-eye"></i> Đọc thử</button>
+                  <button class="editBook text-blue-600 text-sm" data-id="${b.id}">Sửa</button>
+                  <button class="delBook text-red-600 text-sm" data-id="${b.id}">Xóa</button>
+                </div>
+              </div>
+            </div>`).join('')}
+        </div>`;
+      document.getElementById('btnAddBook')?.addEventListener('click', () => openBookModal());
+      document.querySelectorAll('.adminPreviewBook').forEach(btn => btn.addEventListener('click', () => showAdminPreview(+btn.dataset.id)));
+      document.querySelectorAll('.editBook').forEach(btn => btn.addEventListener('click', () => openBookModal(+btn.dataset.id)));
+      document.querySelectorAll('.delBook').forEach(btn => btn.addEventListener('click', () => {
+        if (confirm('Xóa sách này?')) { BOOKS_DB = BOOKS_DB.filter(b => b.id !== +btn.dataset.id); saveBooks(); render(); toast('Đã xóa', true); }
+      }));
+    }
+
+    function renderOrders(el) {
+      el.innerHTML = `
+        <h2 class="text-2xl font-bold mb-4">Quản lý đơn hàng</h2>
+        <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
+          <table class="min-w-full text-sm"><thead class="bg-gray-50"><tr>
+            <th class="px-4 py-3 text-left">Mã</th><th>Khách</th><th>SĐT</th><th>Địa chỉ</th><th>Thanh toán</th><th>Tổng</th><th>Trạng thái</th>
+          </tr></thead><tbody>
+            ${ORDERS_DB.map(o => `<tr class="border-t"><td class="px-4 py-3">#${o.id}</td><td>${o.customerName}</td><td>${o.phone || '-'}</td><td class="max-w-[200px] truncate">${o.address}</td><td>${o.paymentMethod || '-'}</td><td>${o.total.toLocaleString()}đ</td>
+            <td><select class="orderSt border rounded px-2 py-1" data-id="${o.id}"><option value="pending" ${o.status==='pending'?'selected':''}>Chờ</option><option value="delivered" ${o.status==='delivered'?'selected':''}>Đã giao</option></select></td></tr>`).join('') || '<tr><td colspan="7" class="p-6 text-center text-gray-400">Chưa có đơn</td></tr>'}
+          </tbody></table>
+        </div>`;
+      document.querySelectorAll('.orderSt').forEach(s => s.addEventListener('change', () => {
+        const o = ORDERS_DB.find(x => x.id === +s.dataset.id);
+        if (o) { o.status = s.value; saveOrders(); toast('Cập nhật trạng thái', true); }
+      }));
+    }
+
+    function renderUsers(el) {
+      el.innerHTML = `
+        <h2 class="text-2xl font-bold mb-4">Quản lý người dùng</h2>
+        <div class="bg-white rounded-2xl shadow-sm overflow-x-auto">
+          <table class="min-w-full"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left">Tên</th><th>Email</th><th>Ngày tạo</th><th></th></tr></thead>
+          <tbody>${USERS_DB.map(u => `<tr class="border-t"><td class="px-4 py-3">${u.username}</td><td>${u.email}</td><td>${new Date(u.createdAt).toLocaleDateString('vi-VN')}</td><td><button class="delUser text-red-600 text-sm" data-email="${u.email}">Xóa</button></td></tr>`).join('')}</tbody></table>
+        </div>`;
+      document.querySelectorAll('.delUser').forEach(btn => btn.addEventListener('click', () => {
+        if (confirm('Xóa user?')) { USERS_DB = USERS_DB.filter(u => u.email !== btn.dataset.email); saveUsers(); render(); }
+      }));
+    }
+
+    function getPreviewText(book) {
+      if (book.previewText) return book.previewText;
+      if (book.type === 'ebook' && book.fullText) {
+        const len = Math.max(Math.floor(book.fullText.length * 0.1), 400);
+        return book.fullText.substring(0, len) + '\n\n...(10% đọc thử)';
+      }
+      return book.description || 'Chưa có nội dung đọc thử.';
+    }
+    function showAdminPreview(id) {
+      const book = BOOKS_DB.find(b => b.id === id);
+      if (!book) return;
+      const html = `<div id="previewModal" class="fixed inset-0 z-50 flex items-center justify-center modal-bg p-4"><div class="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto"><h3 class="text-xl font-bold mb-2">${book.title} — Đọc thử</h3><p class="text-sm text-gray-500 mb-3">${book.type === 'ebook' ? 'Sách số' : 'Sách vật lý'}</p><div class="whitespace-pre-line text-gray-700 leading-relaxed">${getPreviewText(book)}</div><button id="closePreview" class="mt-4 w-full bg-indigo-600 text-white py-2 rounded-xl">Đóng</button></div></div>`;
+      document.body.insertAdjacentHTML('beforeend', html);
+      document.getElementById('closePreview').onclick = () => document.getElementById('previewModal').remove();
+    }
+
+    function openBookModal(id) {
+      const book = id ? BOOKS_DB.find(b => b.id === id) : null;
+      const html = `
+        <div id="bookModal" class="fixed inset-0 z-50 flex items-center justify-center modal-bg p-4 overflow-y-auto">
+          <div class="bg-white rounded-2xl p-6 w-full max-w-2xl my-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold mb-4">${book ? 'Sửa sách' : 'Thêm sách mới'}</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input id="mTitle" class="border rounded-lg p-2 md:col-span-2" placeholder="Tên sách" value="${book?.title || ''}">
+              <input id="mAuthor" class="border rounded-lg p-2" placeholder="Tác giả" value="${book?.author || ''}">
+              <input id="mPrice" type="number" class="border rounded-lg p-2" placeholder="Giá" value="${book?.price || ''}">
+              <input id="mStock" type="number" class="border rounded-lg p-2" placeholder="Tồn kho (vật lý)" value="${book?.stock ?? 10}">
+              <select id="mType" class="border rounded-lg p-2 md:col-span-2">
+                <option value="physical" ${book?.type === 'physical' ? 'selected' : ''}>Sách vật lý</option>
+                <option value="ebook" ${book?.type === 'ebook' ? 'selected' : ''}>Sách số (eBook)</option>
+              </select>
+              <div class="md:col-span-2">
+                <label class="text-sm font-medium text-gray-700">Thể loại <span class="text-red-500">*</span></label>
+                <select id="mCategory" class="w-full border rounded-lg p-2 mt-1">${categoryOptionsHtml(book?.categoryId)}</select>
+              </div>
+            </div>
+            <div class="mt-3"><label class="text-sm font-medium">Ảnh minh họa (bìa)</label><input type="file" id="mCover" accept="image/*" class="w-full border rounded-lg p-2 mt-1"></div>
+            <div id="mPdfBlock" class="mt-3 ${book?.type === 'ebook' ? '' : 'hidden'}">
+              <label class="text-sm font-medium">File PDF (sách số) — tự lấy 10% làm đọc thử</label>
+              <input type="file" id="mPdf" accept="application/pdf" class="w-full border rounded-lg p-2 mt-1">
+              <p class="text-xs text-gray-500 mt-1">Hệ thống trích xuất ~10% nội dung đầu làm đọc thử.</p>
+            </div>
+            <div class="mt-3"><label class="text-sm font-medium">Mô tả</label><textarea id="mDesc" class="w-full border rounded-lg p-2 mt-1" rows="2">${book?.description || ''}</textarea></div>
+            <div id="mPreviewPhysical" class="mt-3 ${book?.type === 'physical' || !book ? '' : 'hidden'}">
+              <label class="text-sm font-medium">Nội dung đọc thử (sách vật lý — nhập tay)</label>
+              <textarea id="mPreviewText" class="w-full border rounded-lg p-2 mt-1" rows="4" placeholder="Nhập đoạn đọc thử cho sách giấy...">${book?.previewText || ''}</textarea>
+            </div>
+            <div id="mFullTextBlock" class="mt-3 ${book?.type === 'ebook' ? '' : 'hidden'}">
+              <label class="text-sm font-medium">Nội dung đầy đủ (sách số — tự từ PDF hoặc sửa tay)</label>
+              <textarea id="mFullText" class="w-full border rounded-lg p-2 mt-1" rows="6">${book?.fullText || ''}</textarea>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+              <button id="mCancel" class="px-4 py-2 bg-gray-200 rounded-lg">Hủy</button>
+              <button id="mSave" class="px-4 py-2 bg-indigo-600 text-white rounded-lg">Lưu</button>
+            </div>
+          </div>
+        </div>`;
+      document.body.insertAdjacentHTML('beforeend', html);
+      const typeSel = document.getElementById('mType');
+      const syncType = () => {
+        const ebook = typeSel.value === 'ebook';
+        document.getElementById('mPdfBlock').classList.toggle('hidden', !ebook);
+        document.getElementById('mFullTextBlock').classList.toggle('hidden', !ebook);
+        document.getElementById('mPreviewPhysical').classList.toggle('hidden', ebook);
+      };
+      typeSel.addEventListener('change', syncType);
+      document.getElementById('mPdf')?.addEventListener('change', async e => {
+        const f = e.target.files[0];
+        if (!f) return;
+        toast('Đang đọc PDF...', false);
+        try {
+          const ex = await extractFromPdf(f);
+          document.getElementById('mFullText').value = ex.fullText;
+          document.getElementById('mPreviewText').value = ex.previewText;
+          toast('Đã trích xuất 10% đọc thử từ PDF', true);
+        } catch (err) { toast('Không đọc được PDF', false); }
+      });
+      const close = () => document.getElementById('bookModal')?.remove();
+      document.getElementById('mCancel').onclick = close;
+      document.getElementById('mSave').onclick = async () => {
+        const title = document.getElementById('mTitle').value.trim();
+        const author = document.getElementById('mAuthor').value.trim();
+        const price = +document.getElementById('mPrice').value;
+        const stock = +document.getElementById('mStock').value || 0;
+        const type = typeSel.value;
+        const desc = document.getElementById('mDesc').value;
+        let previewText = document.getElementById('mPreviewText').value;
+        let fullText = document.getElementById('mFullText').value || null;
+        const categoryId = document.getElementById('mCategory').value ? +document.getElementById('mCategory').value : null;
+        if (!title || !author || !price) { toast('Nhập đủ thông tin', false); return; }
+        if (!categoryId) { toast('Chọn thể loại cho sách', false); return; }
+        if (!CATEGORIES_DB.length) { toast('Chưa có thể loại — hãy tạo trong mục Thể loại', false); return; }
+        let coverBase64 = book?.coverBase64 || null;
+        if (document.getElementById('mCover').files[0]) coverBase64 = await readB64(document.getElementById('mCover').files[0]);
+        let pdfBase64 = book?.pdfBase64 || null;
+        if (type === 'ebook' && document.getElementById('mPdf').files[0]) {
+          pdfBase64 = await readB64(document.getElementById('mPdf').files[0]);
+          if (!fullText) {
+            const ex = await extractFromPdf(document.getElementById('mPdf').files[0]);
+            fullText = ex.fullText;
+            previewText = ex.previewText;
+          } else if (!previewText && fullText) {
+            previewText = fullText.substring(0, Math.max(Math.floor(fullText.length * 0.1), 300));
+          }
+        }
+        const payload = { title, author, price, type, categoryId, stock: type === 'physical' ? stock : 999, description: desc, previewText, fullText, coverBase64, pdfBase64, coverUrl: coverBase64 ? null : (book?.coverUrl || null) };
+        if (book) Object.assign(book, payload);
+        else BOOKS_DB.push({ id: Math.max(0, ...BOOKS_DB.map(b => b.id)) + 1, ...payload });
+        saveBooks();
+        close();
+        render();
+        toast('Lưu sách thành công', true);
+      };
+    }
+
+    function checkSession() {
+      if (sessionStorage.getItem('bookheaven_admin') === '1') {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('adminApp').classList.remove('hidden');
+        loadAll();
+        render();
+      }
+    }
+
+    document.getElementById('adminDoLogin')?.addEventListener('click', () => {
+      const e = document.getElementById('adminLoginEmail').value.trim();
+      const p = document.getElementById('adminLoginPass').value;
+      if (e === ADMIN_EMAIL && p === ADMIN_PASSWORD) {
+        sessionStorage.setItem('bookheaven_admin', '1');
+        checkSession();
+        toast('Chào mừng Admin!', true);
+      } else alert('Sai email hoặc mật khẩu admin');
+    });
+    document.getElementById('adminLogout')?.addEventListener('click', () => {
+      sessionStorage.removeItem('bookheaven_admin');
+      location.reload();
+    });
+    document.querySelectorAll('.navBtn').forEach(b => b.addEventListener('click', () => { adminView = b.dataset.view; render(); }));
+    checkSession();
+  </script>
+</body>
+</html>

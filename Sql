@@ -1,0 +1,460 @@
+-- ======================================================
+-- BOOKHEAVEN - CƠ SỞ DỮ LIỆU CHI TIẾT
+-- Phiên bản: 2.0
+-- Hỗ trợ: MySQL 5.7+, có thể điều chỉnh cho PostgreSQL
+-- ======================================================
+
+-- Tạo database (nếu chưa có)
+CREATE DATABASE IF NOT EXISTS bookheaven
+CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE bookheaven;
+
+-- ======================================================
+-- 1. Bảng DANH MỤC SÁCH (categories)
+-- ======================================================
+CREATE TABLE IF NOT EXISTS categories (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    slug VARCHAR(120) NOT NULL UNIQUE,
+    parent_id INT UNSIGNED DEFAULT NULL,
+    description TEXT,
+    display_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL,
+    INDEX idx_parent (parent_id),
+    INDEX idx_slug (slug)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 2. Bảng NGƯỜI DÙNG (users) – mở rộng
+-- ======================================================
+CREATE TABLE IF NOT EXISTS users (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(100) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL, -- lưu bcrypt hoặc plain (demo)
+    full_name VARCHAR(150),
+    phone VARCHAR(20),
+    address TEXT,
+    avatar_url TEXT,
+    role ENUM('user', 'admin', 'staff') DEFAULT 'user',
+    email_verified_at TIMESTAMP NULL,
+    remember_token VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    last_login TIMESTAMP NULL,
+    status TINYINT DEFAULT 1 COMMENT '1: active, 0: blocked',
+    INDEX idx_email (email),
+    INDEX idx_role (role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 3. Bảng SÁCH (books) – chi tiết, có category, stock, v.v.
+-- ======================================================
+CREATE TABLE IF NOT EXISTS books (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    slug VARCHAR(280) NOT NULL UNIQUE,
+    author VARCHAR(255) NOT NULL,
+    category_id INT UNSIGNED DEFAULT NULL,
+    type ENUM('physical', 'ebook') NOT NULL,
+    price DECIMAL(12,0) NOT NULL CHECK (price >= 0),
+    discount_price DECIMAL(12,0) DEFAULT NULL,
+    stock INT DEFAULT 0 COMMENT 'chỉ áp dụng cho sách vật lý',
+    cover_url TEXT,
+    cover_base64 LONGTEXT,
+    description TEXT,
+    full_text LONGTEXT COMMENT 'nội dung sách số',
+    pdf_base64 LONGTEXT COMMENT 'file PDF base64 (sách số)',
+    sample_text TEXT COMMENT 'đoạn đọc thử',
+    page_count INT,
+    publisher VARCHAR(255),
+    publish_year YEAR,
+    isbn VARCHAR(20),
+    total_sold INT DEFAULT 0,
+    rating_avg DECIMAL(2,1) DEFAULT 0,
+    status TINYINT DEFAULT 1 COMMENT '1: published, 0: draft',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+    INDEX idx_type (type),
+    INDEX idx_price (price),
+    INDEX idx_slug (slug),
+    INDEX idx_author (author),
+    INDEX idx_category (category_id),
+    FULLTEXT INDEX ft_title_author (title, author)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 4. Bảng GIỎ HÀNG (carts) – hỗ trợ cả user đã đăng nhập và session_id (guest)
+-- ======================================================
+CREATE TABLE IF NOT EXISTS carts (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED DEFAULT NULL,
+    session_id VARCHAR(100) DEFAULT NULL, -- cho guest
+    book_id INT UNSIGNED NOT NULL,
+    quantity INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+    INDEX idx_user (user_id),
+    INDEX idx_session (session_id),
+    INDEX idx_user_book (user_id, book_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 5. Bảng MÃ GIẢM GIÁ (coupons)
+-- ======================================================
+CREATE TABLE IF NOT EXISTS coupons (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    discount_type ENUM('percent', 'fixed') DEFAULT 'percent',
+    discount_value DECIMAL(10,2) NOT NULL,
+    min_order_value DECIMAL(12,0) DEFAULT 0,
+    max_discount DECIMAL(12,0) DEFAULT NULL,
+    usage_limit INT DEFAULT 1,
+    used_count INT DEFAULT 0,
+    start_date DATETIME NOT NULL,
+    end_date DATETIME NOT NULL,
+    status TINYINT DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 6. Bảng ĐƠN HÀNG (orders)
+-- ======================================================
+CREATE TABLE IF NOT EXISTS orders (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    order_number VARCHAR(20) NOT NULL UNIQUE,
+    user_id INT UNSIGNED NOT NULL,
+    coupon_id INT UNSIGNED DEFAULT NULL,
+    discount_amount DECIMAL(12,0) DEFAULT 0,
+    shipping_fee DECIMAL(12,0) DEFAULT 0,
+    total_amount DECIMAL(12,0) NOT NULL,
+    final_amount DECIMAL(12,0) NOT NULL,
+    customer_name VARCHAR(150) NOT NULL,
+    customer_email VARCHAR(255),
+    customer_phone VARCHAR(20),
+    shipping_address TEXT NOT NULL,
+    billing_address TEXT,
+    payment_method ENUM('cod', 'momo', 'zalopay', 'bank_transfer') DEFAULT 'cod',
+    payment_status ENUM('pending', 'paid', 'failed', 'refunded') DEFAULT 'pending',
+    order_status ENUM('pending', 'processing', 'shipped', 'delivered', 'cancelled') DEFAULT 'pending',
+    note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE SET NULL,
+    INDEX idx_user (user_id),
+    INDEX idx_order_number (order_number),
+    INDEX idx_status (order_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 7. Bảng CHI TIẾT ĐƠN HÀNG (order_items)
+-- ======================================================
+CREATE TABLE IF NOT EXISTS order_items (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    order_id INT UNSIGNED NOT NULL,
+    book_id INT UNSIGNED DEFAULT NULL,
+    book_snapshot JSON COMMENT 'lưu lại title, price, type, cover tại thời điểm mua',
+    quantity INT NOT NULL CHECK (quantity > 0),
+    unit_price DECIMAL(12,0) NOT NULL,
+    total_price DECIMAL(12,0) NOT NULL,
+    type ENUM('physical', 'ebook') NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE SET NULL,
+    INDEX idx_order (order_id),
+    INDEX idx_book (book_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 8. Bảng THƯ VIỆN SÁCH SỐ (user_library)
+-- ======================================================
+CREATE TABLE IF NOT EXISTS user_library (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    book_id INT UNSIGNED NOT NULL,
+    progress INT DEFAULT 0 COMMENT 'số ký tự đã đọc (hoặc phần trăm * 100)',
+    last_read_at TIMESTAMP NULL,
+    purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_user_book (user_id, book_id),
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 9. Bảng ĐÁNH GIÁ SÁCH (reviews)
+-- ======================================================
+CREATE TABLE IF NOT EXISTS reviews (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    book_id INT UNSIGNED NOT NULL,
+    rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment TEXT,
+    status ENUM('pending', 'approved', 'hidden') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+    INDEX idx_book (book_id),
+    INDEX idx_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 10. Bảng LƯU TRỮ PHIÊN (sessions) – cho giỏ hàng guest, token
+-- ======================================================
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id VARCHAR(128) NOT NULL PRIMARY KEY,
+    user_id INT UNSIGNED DEFAULT NULL,
+    ip_address VARCHAR(45) DEFAULT NULL,
+    user_agent TEXT,
+    payload TEXT NOT NULL,
+    last_activity INT UNSIGNED NOT NULL,
+    INDEX idx_last_activity (last_activity),
+    INDEX idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 11. Bảng NHẬT KÝ ADMIN (admin_logs)
+-- ======================================================
+CREATE TABLE IF NOT EXISTS admin_logs (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    admin_id INT UNSIGNED NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    target_type VARCHAR(50),
+    target_id INT,
+    old_data JSON,
+    new_data JSON,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_admin (admin_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 12. Bảng THANH TOÁN (payments) – lưu giao dịch MoMo, ZaloPay
+-- ======================================================
+CREATE TABLE IF NOT EXISTS payments (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    order_id INT UNSIGNED NOT NULL,
+    payment_method ENUM('momo', 'zalopay', 'bank_transfer') NOT NULL,
+    transaction_id VARCHAR(100) UNIQUE,
+    amount DECIMAL(12,0) NOT NULL,
+    status ENUM('pending', 'success', 'failed') DEFAULT 'pending',
+    payment_data JSON COMMENT 'phản hồi từ cổng thanh toán',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    INDEX idx_transaction (transaction_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- 13. Bảng SLIDERS / BANNER (quảng cáo)
+-- ======================================================
+CREATE TABLE IF NOT EXISTS sliders (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(200),
+    image_url TEXT NOT NULL,
+    link VARCHAR(255),
+    display_order INT DEFAULT 0,
+    status TINYINT DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ======================================================
+-- INDEX NÂNG CAO (cho hiệu suất)
+-- ======================================================
+CREATE INDEX idx_books_price_type ON books(price, type);
+CREATE INDEX idx_orders_created ON orders(created_at);
+CREATE INDEX idx_order_items_order_book ON order_items(order_id, book_id);
+CREATE INDEX idx_carts_user_created ON carts(user_id, added_at);
+CREATE INDEX idx_user_library_progress ON user_library(progress);
+
+-- ======================================================
+-- TRIGGER: Cập nhật total_sold và rating_avg của sách
+-- ======================================================
+DELIMITER //
+
+-- Trigger sau khi thêm order_item thành công (chỉ với sách vật lý tăng total_sold)
+CREATE TRIGGER after_order_item_insert
+AFTER INSERT ON order_items
+FOR EACH ROW
+BEGIN
+    UPDATE books SET total_sold = total_sold + NEW.quantity
+    WHERE id = NEW.book_id AND NEW.type = 'physical';
+END;
+//
+
+-- Trigger cập nhật rating_avg khi có đánh giá mới hoặc cập nhật
+CREATE TRIGGER after_review_insert_update
+AFTER INSERT ON reviews
+FOR EACH ROW
+BEGIN
+    IF NEW.status = 'approved' THEN
+        UPDATE books SET rating_avg = (
+            SELECT AVG(rating) FROM reviews WHERE book_id = NEW.book_id AND status = 'approved'
+        ) WHERE id = NEW.book_id;
+    END IF;
+END;
+//
+
+CREATE TRIGGER after_review_update
+AFTER UPDATE ON reviews
+FOR EACH ROW
+BEGIN
+    IF NEW.status = 'approved' OR OLD.status != NEW.status THEN
+        UPDATE books SET rating_avg = (
+            SELECT AVG(rating) FROM reviews WHERE book_id = NEW.book_id AND status = 'approved'
+        ) WHERE id = NEW.book_id;
+    END IF;
+END;
+//
+
+DELIMITER ;
+
+-- ======================================================
+-- VIEW: Thống kê doanh thu theo tháng
+-- ======================================================
+CREATE OR REPLACE VIEW v_monthly_revenue AS
+SELECT 
+    DATE_FORMAT(created_at, '%Y-%m') AS month,
+    COUNT(id) AS total_orders,
+    SUM(final_amount) AS revenue,
+    SUM(CASE WHEN payment_method = 'momo' THEN final_amount ELSE 0 END) AS momo_revenue,
+    SUM(CASE WHEN payment_method = 'zalopay' THEN final_amount ELSE 0 END) AS zalopay_revenue
+FROM orders
+WHERE order_status = 'delivered' AND payment_status = 'paid'
+GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+ORDER BY month DESC;
+
+-- View: Chi tiết sách trong thư viện của user
+CREATE OR REPLACE VIEW v_user_library_details AS
+SELECT 
+    ul.user_id,
+    u.username,
+    b.id AS book_id,
+    b.title,
+    b.author,
+    b.cover_url,
+    ul.progress,
+    LENGTH(b.full_text) AS total_length,
+    ROUND((ul.progress / NULLIF(LENGTH(b.full_text), 0)) * 100, 2) AS percent_read,
+    ul.purchased_at,
+    ul.last_read_at
+FROM user_library ul
+JOIN users u ON ul.user_id = u.id
+JOIN books b ON ul.book_id = b.id
+WHERE b.type = 'ebook';
+
+-- View: Top sách bán chạy
+CREATE OR REPLACE VIEW v_top_books AS
+SELECT 
+    b.id,
+    b.title,
+    b.author,
+    b.total_sold,
+    b.rating_avg,
+    b.price,
+    b.cover_url
+FROM books b
+WHERE b.status = 1
+ORDER BY b.total_sold DESC
+LIMIT 20;
+
+-- ======================================================
+-- STORED PROCEDURE: Thống kê doanh thu dashboard admin
+-- ======================================================
+DELIMITER //
+
+CREATE PROCEDURE sp_dashboard_stats(IN year INT)
+BEGIN
+    -- Tổng quan
+    SELECT 
+        (SELECT SUM(final_amount) FROM orders WHERE order_status = 'delivered' AND payment_status = 'paid') AS total_revenue,
+        (SELECT COUNT(*) FROM orders) AS total_orders,
+        (SELECT SUM(quantity) FROM order_items) AS total_books_sold,
+        (SELECT COUNT(*) FROM users WHERE role = 'user') AS total_users;
+    
+    -- Doanh thu theo tháng trong năm
+    SELECT 
+        MONTH(created_at) AS month,
+        SUM(final_amount) AS revenue
+    FROM orders
+    WHERE YEAR(created_at) = year AND order_status = 'delivered' AND payment_status = 'paid'
+    GROUP BY MONTH(created_at)
+    ORDER BY month;
+END;
+//
+
+DELIMITER ;
+
+-- ======================================================
+-- DỮ LIỆU MẪU (MOCK DATA)
+-- ======================================================
+
+-- Categories
+INSERT INTO categories (name, slug, parent_id, display_order) VALUES
+('Văn học', 'van-hoc', NULL, 1),
+('Khoa học - Kỹ thuật', 'khoa-hoc-ky-thuat', NULL, 2),
+('Lập trình - Công nghệ', 'lap-trinh', NULL, 3),
+('Tâm lý - Kỹ năng', 'tam-ly-ky-nang', NULL, 4),
+('Thiếu nhi', 'thieu-nhi', NULL, 5),
+('Tiểu thuyết', 'tieu-thuyet', 1, 1),
+('Thơ ca', 'tho-ca', 1, 2);
+
+-- Users (password_hash trong demo là plain text, nên dùng bcrypt thực tế)
+INSERT INTO users (username, email, password_hash, full_name, phone, role, status) VALUES
+('admin', 'bookheaven@gmail.com', 'Admin123', 'Quản trị viên', '0988888888', 'admin', 1),
+('nguyenvana', 'demo@example.com', '123456', 'Nguyễn Văn A', '0912345678', 'user', 1),
+('tranthib', 'user2@example.com', 'abc123', 'Trần Thị B', '0987654321', 'user', 1);
+
+-- Sách mẫu (bổ sung category, stock, v.v.)
+INSERT INTO books (title, slug, author, category_id, type, price, stock, cover_url, description, full_text, sample_text, publisher, total_sold, rating_avg) VALUES
+('Đại gia Gatsby', 'dai-gia-gatsby', 'F. Scott Fitzgerald', 6, 'physical', 125000, 50, 'https://picsum.photos/id/20/300/400', 'Kiệt tác văn học Mỹ về giấc mơ và sự sụp đổ.', NULL, 'Đoạn trích: Gatsby, người đàn ông bí ẩn...', 'NXB Văn học', 120, 4.5),
+('JavaScript: Tinh hoa', 'javascript-tinh-hoa', 'Douglas Crockford', 3, 'ebook', 89000, NULL, 'https://picsum.photos/id/1/300/400', 'Khám phá những phần hay nhất của JavaScript.', 'Chương 1: JavaScript là ngôn ngữ linh hoạt... (toàn văn dài)', 'Xem thử: JavaScript có nhiều điểm thú vị', 'O''Reilly', 340, 4.8),
+('Clean Code', 'clean-code', 'Robert C. Martin', 3, 'physical', 249000, 30, 'https://picsum.photos/id/26/300/400', 'Nguyên tắc viết code sạch, dễ bảo trì.', NULL, 'Chapter 1: Clean code', 'Pearson', 560, 4.9),
+('Atomic Habits', 'atomic-habits', 'James Clear', 4, 'ebook', 139000, NULL, 'https://picsum.photos/id/29/300/400', 'Thay đổi nhỏ, kết quả lớn.', 'Nội dung đầy đủ: Thói quen nguyên tử...', 'Habits 1%', 'Penguin', 870, 4.7),
+('Dune - Xứ Cát', 'dune', 'Frank Herbert', 6, 'physical', 185000, 20, 'https://picsum.photos/id/30/300/400', 'Sử thi khoa học viễn tưởng kinh điển.', NULL, 'Mở đầu: The planet Arrakis...', 'NXB Trẻ', 210, 4.6),
+('The Pragmatic Programmer', 'pragmatic-programmer', 'David Thomas', 3, 'ebook', 210000, NULL, 'https://picsum.photos/id/0/300/400', 'Kỹ năng thực hành cho lập trình viên.', 'Chapter: A Pragmatic Philosophy...', 'Tip 1: Care about your craft', 'Addison-Wesley', 430, 4.8);
+
+-- Coupon mẫu
+INSERT INTO coupons (code, discount_type, discount_value, min_order_value, max_discount, usage_limit, start_date, end_date) VALUES
+('WELCOME10', 'percent', 10, 0, 50000, 100, NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY)),
+('HEAVEN50', 'fixed', 50000, 200000, NULL, 20, NOW(), DATE_ADD(NOW(), INTERVAL 60 DAY));
+
+-- Đơn hàng mẫu (order_number tự sinh)
+INSERT INTO orders (order_number, user_id, total_amount, final_amount, customer_name, customer_phone, shipping_address, payment_method, order_status, payment_status) VALUES
+('BH100001', 2, 374000, 374000, 'Nguyễn Văn A', '0912345678', 'Hà Nội, Việt Nam', 'cod', 'delivered', 'paid'),
+('BH100002', 2, 210000, 210000, 'Nguyễn Văn A', '0912345678', 'TP HCM', 'momo', 'delivered', 'paid');
+
+-- Order items
+INSERT INTO order_items (order_id, book_id, book_snapshot, quantity, unit_price, total_price, type) VALUES
+(1, 3, JSON_OBJECT('title', 'Clean Code', 'price', 249000), 1, 249000, 249000, 'physical'),
+(1, 4, JSON_OBJECT('title', 'Atomic Habits', 'price', 139000), 1, 139000, 139000, 'ebook'),
+(2, 6, JSON_OBJECT('title', 'The Pragmatic Programmer', 'price', 210000), 1, 210000, 210000, 'ebook');
+
+-- Thư viện sách số của user (demo)
+INSERT INTO user_library (user_id, book_id, progress, last_read_at) VALUES
+(2, 2, 1250, NOW()),
+(2, 4, 0, NULL);
+
+-- Đánh giá mẫu
+INSERT INTO reviews (user_id, book_id, rating, comment, status) VALUES
+(2, 3, 5, 'Sách rất hay, nên đọc!', 'approved'),
+(2, 4, 4, 'Giúp thay đổi thói quen tích cực', 'approved');
+
+-- Giỏ hàng mẫu (cho user 2)
+INSERT INTO carts (user_id, book_id, quantity) VALUES
+(2, 1, 2);
+
+-- Slider mẫu
+INSERT INTO sliders (title, image_url, link, display_order) VALUES
+('Sách mới về lập trình', 'https://picsum.photos/id/1/1200/400', '/category/lap-trinh', 1),
+('Giảm giá 50% sách kỹ năng', 'https://picsum.photos/id/26/1200/400', '/promo', 2);
+
+-- ======================================================
+-- KẾT THÚC FILE SQL
+-- ======================================================
